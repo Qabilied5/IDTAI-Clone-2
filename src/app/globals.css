@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-canvas: #ffffff;
+  --color-panel: #f7f7f8;
+  --color-panel-raised: #f3f4f6;
+  --color-border: #e2e4e8;
+  --color-text-primary: #171717;
+  --color-text-muted: #6b7280;
+  --color-accent: #d6001c;
+  --color-accent-strong: #a80016;
+  --color-success: #16a34a;
+  --color-danger: #c81e3a;
+}
+
+::selection {
+  background-color: var(--color-accent);
+  color: var(--color-canvas);
+}
