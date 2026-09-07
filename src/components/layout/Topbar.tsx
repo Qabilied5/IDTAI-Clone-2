@@ -2,43 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import {
-  IconSun,
-  IconSunHigh,
-  IconSunset2,
-  IconMoonStars,
-  IconCalendarEvent,
-  IconClock,
-} from "@tabler/icons-react";
-import NotificationPanel from "./NotificationPanel";
-import { getPageTitle } from "@/lib/utils";
+import { CalendarClock, Clock, Moon, Sun, Sunset } from "lucide-react";
 
-const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+import { formatDateStr, formatTimeStr, getGreeting, getPageTitle } from "@/lib/nav";
 
-function pad(n: number) {
-  return String(n).padStart(2, "0");
-}
+import { NotificationBell } from "./NotificationBell";
 
-type Greeting = {
-  text: string;
-  Icon: typeof IconSun;
-  cls: "greeting-pagi" | "greeting-siang" | "greeting-sore" | "greeting-malam";
+const GREETING_ICON = { pagi: Sun, siang: Sun, sore: Sunset, malam: Moon };
+const GREETING_STYLE: Record<string, string> = {
+  pagi: "bg-amber-50 text-amber-700",
+  siang: "bg-accent-soft text-accent",
+  sore: "bg-orange-50 text-orange-700",
+  malam: "bg-indigo-50 text-indigo-800",
 };
 
-function getGreeting(hour: number): Greeting {
-  if (hour >= 5 && hour < 12) return { text: "Selamat Pagi", Icon: IconSun, cls: "greeting-pagi" };
-  if (hour >= 12 && hour < 15) return { text: "Selamat Siang", Icon: IconSunHigh, cls: "greeting-siang" };
-  if (hour >= 15 && hour < 19) return { text: "Selamat Sore", Icon: IconSunset2, cls: "greeting-sore" };
-  return { text: "Selamat Malam", Icon: IconMoonStars, cls: "greeting-malam" };
-}
-
-export default function Topbar() {
+export function Topbar() {
   const pathname = usePathname();
-  const pageTitle = getPageTitle(pathname);
+  const title = getPageTitle(pathname);
 
-  // now starts null so the server-rendered markup and first client render
-  // match exactly (avoids a hydration mismatch); the clock fills in on mount.
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -47,36 +28,38 @@ export default function Topbar() {
     return () => clearInterval(id);
   }, []);
 
-  const dateStr = now ? `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}` : "";
-  const timeStr = now ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : "";
-  const greeting = getGreeting(now ? now.getHours() : 8);
-  const GreetingIcon = greeting.Icon;
+  const greeting = getGreeting(now ?? new Date());
+  const GreetingIcon = GREETING_ICON[greeting.variant];
 
   return (
-    <div className="topbar">
-      <div className="topbar-left">
-        <div className="topbar-breadcrumb">
-          <span className={`tb-greeting-chip ${greeting.cls}`}>
-            <GreetingIcon size={12} stroke={2} />
-            <span>{greeting.text}</span>
+    <div className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-neutral-200 bg-white pl-6 pr-5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${GREETING_STYLE[greeting.variant]}`}
+        >
+          <GreetingIcon className="h-3 w-3" />
+          {greeting.text}
+        </span>
+        <span className="h-[18px] w-px shrink-0 bg-neutral-200" />
+        <div className="truncate text-[15px] font-bold text-ink">{title}</div>
+      </div>
+
+      <div className="flex items-center justify-center">
+        <div className="flex items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-neutral-200 bg-neutral-50 px-3 py-1.5">
+          <CalendarClock className="h-[13px] w-[13px] text-neutral-400" />
+          <span className="text-[11.5px] font-medium text-neutral-600">
+            {now ? formatDateStr(now) : "—"}
           </span>
-          <span className="tb-sep" />
-          <div className="topbar-title">{pageTitle}</div>
+          <span className="mx-0.5 h-3.5 w-px bg-neutral-200" />
+          <Clock className="h-[13px] w-[13px] text-neutral-400" />
+          <span className="min-w-[52px] text-xs font-bold tracking-wide text-ink [font-variant-numeric:tabular-nums]">
+            {now ? formatTimeStr(now) : "—"}
+          </span>
         </div>
       </div>
 
-      <div className="topbar-center">
-        <div className="tb-datetime">
-          <IconCalendarEvent className="tb-dt-icon" size={13} stroke={2} />
-          <span className="tb-date-str">{dateStr}</span>
-          <span className="tb-dt-divider" />
-          <IconClock className="tb-dt-icon" size={13} stroke={2} />
-          <span className="tb-time-str">{timeStr}</span>
-        </div>
-      </div>
-
-      <div className="topbar-right">
-        <NotificationPanel />
+      <div className="flex items-center justify-end gap-2">
+        <NotificationBell />
       </div>
     </div>
   );

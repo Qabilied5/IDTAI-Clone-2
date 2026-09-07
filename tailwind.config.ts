@@ -1,10 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: [
-    "./src/app/**/*.{ts,tsx}",
-    "./src/components/**/*.{ts,tsx}",
-  ],
+  content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
@@ -17,6 +14,8 @@ const config: Config = {
         accent: {
           DEFAULT: "var(--color-accent)",
           strong: "var(--color-accent-strong)",
+          soft: "var(--color-accent-soft)",
+          mid: "var(--color-accent-mid)",
         },
         success: "var(--color-success)",
         danger: "var(--color-danger)",
