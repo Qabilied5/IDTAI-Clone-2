@@ -1,7 +1,10 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./src/**/*.{ts,tsx}"],
+  content: [
+    "./src/app/**/*.{ts,tsx}",
+    "./src/components/**/*.{ts,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
@@ -9,7 +12,7 @@ const config: Config = {
         panel: "var(--color-panel)",
         "panel-raised": "var(--color-panel-raised)",
         border: "var(--color-border)",
-        primary: "var(--color-text-primary)",
+        ink: "var(--color-text-primary)",
         muted: "var(--color-text-muted)",
         accent: {
           DEFAULT: "var(--color-accent)",

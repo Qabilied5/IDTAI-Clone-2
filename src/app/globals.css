@@ -13,6 +13,8 @@
   --color-accent-strong: #a80016;
   --color-success: #16a34a;
   --color-danger: #c81e3a;
+  --color-accent-soft: #fceaed;
+  --color-accent-mid: #f5c2cb;
 }
 
 ::selection {
