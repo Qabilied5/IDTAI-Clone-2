@@ -16,6 +16,8 @@ import {
 import { syncLeadStageToSheet, SheetNotConnectedError } from "@/lib/pipeline-sheet";
 import { wonStageId } from "@/components/pipeline/pipeline-ui";
 import type {
+  ImportLeadsOptions,
+  ImportLeadsResult,
   LeadDealInput,
   NewPipelineDeal,
   PipelineDeal,
@@ -66,7 +68,7 @@ export function usePipeline() {
     const label = stages.find((s) => s.id === deal.stage)?.label ?? deal.stage;
     const isWon = deal.stage === wonStageId(stages);
     try {
-      await syncLeadStageToSheet(deal.leadId, label, isWon);
+      await syncLeadStageToSheet({ leadId: deal.leadId, stageLabel: label, isWon, sheetRow: deal.sheetRow, expectValue: deal.contactName });
       setSheetNotice({ msg: isWon ? "Lead di Google Sheet ditandai Closed." : "Stage lead di Google Sheet diperbarui.", type: "ok", n: Date.now() });
     } catch (err) {
       const msg = err instanceof SheetNotConnectedError ? err.message : "Stage tersimpan, tapi gagal sync ke Google Sheet.";
@@ -82,11 +84,12 @@ export function usePipeline() {
     return deal;
   }
 
-  /* Impor lead dari Google Sheet jadi deal (lead yang sudah punya deal dilewati server). */
-  async function importLeads(inputs: LeadDealInput[]) {
-    const { created, skipped } = await importLeadDeals(inputs);
-    if (created.length > 0) setDeals((prev) => [...created, ...prev]);
-    return { created: created.length, skipped };
+  /* Impor / sinkron lead dari Google Sheet. Stage bisa bertambah & deal lama bisa pindah stage,
+     jadi board dimuat ulang dari server setelahnya. */
+  async function importLeads(inputs: LeadDealInput[], options: ImportLeadsOptions): Promise<ImportLeadsResult> {
+    const result = await importLeadDeals(inputs, options);
+    await load();
+    return result;
   }
 
   async function moveDeal(id: string, stage: string) {

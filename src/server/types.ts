@@ -212,6 +212,7 @@ export interface PipelineDeal {
   notes: string;
   activity: PipelineActivity[];
   leadId?: number | null;
+  sheetRow?: number | null;
 }
 
 export interface PipelineStage {

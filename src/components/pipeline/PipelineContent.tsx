@@ -275,11 +275,17 @@ export function PipelineContent() {
 
         {importOpen && (
           <ImportLeadsModal
+            stages={stages}
             existingLeadIds={linkedLeadIds}
             onClose={closeImport}
-            onImport={async (inputs) => {
-              const r = await importLeads(inputs);
-              showToast(r.created > 0 ? `${r.created} lead diimpor ke pipeline${r.skipped ? `, ${r.skipped} dilewati` : ""}.` : "Semua lead terpilih sudah ada di pipeline.");
+            onImport={async (inputs, options) => {
+              const r = await importLeads(inputs, options);
+              const parts = [
+                r.created > 0 && `${r.created} lead diimpor`,
+                r.updated > 0 && `${r.updated} deal dipindah stage`,
+                r.stagesAdded.length > 0 && `stage baru: ${r.stagesAdded.join(", ")}`,
+              ].filter(Boolean);
+              showToast(parts.length ? `${parts.join(" · ")}.` : "Tidak ada perubahan — semua sudah sesuai Sheet.");
               return r;
             }}
           />

@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchSheet, postSheet } from '@/server/leads';
+import { assertSheetUrl, fetchSheet, postSheet } from '@/server/leads';
 
 export const dynamic = 'force-dynamic';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
-// GET /api/leads?sheetUrl=...  → daftar leads dari Google Sheets
+// GET /api/leads?sheetUrl=...             → daftar leads dari Google Sheets
+// GET /api/leads?sheetUrl=...&action=raw  → header + isi mentah semua kolom (untuk memilih kolom Pipeline Stage)
 export async function GET(req: NextRequest) {
   try {
-    const data = await fetchSheet(req.nextUrl.searchParams.get('sheetUrl') ?? '');
+    const url = assertSheetUrl(req.nextUrl.searchParams.get('sheetUrl'));
+    if (req.nextUrl.searchParams.get('action') === 'raw') url.searchParams.set('action', 'raw');
+    const data = await fetchSheet(url.toString());
     return NextResponse.json(data);
   } catch (e) {
     return fail(e instanceof Error ? e.message : 'Gagal memuat spreadsheet', 502);
   }
 }
 
-// POST /api/leads  { sheetUrl, payload: { action: 'updateStatus' | 'updateLead' | 'createLead', ... } }
+// POST /api/leads  { sheetUrl, payload: { action: 'updateStatus' | 'updateLead' | 'createLead' | 'setCell', ... } }
 export async function POST(req: NextRequest) {
   try {
     const { sheetUrl, payload } = await req.json();

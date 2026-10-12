@@ -29,3 +29,15 @@
 .pl-imp-state { padding: 28px 12px; text-align: center; font-size: 12.5px; color: var(--gray-500); line-height: 1.6; }
 .pl-imp-state a { color: var(--red); font-weight: 600; }
 .pl-imp-foot-info { margin-right: auto; font-size: 11.5px; color: var(--gray-500); }
+
+/* ── Pilihan kolom Pipeline Stage ── */
+.pl-imp-config { display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 12px; }
+.pl-imp-warn { font-size: 11.5px; line-height: 1.5; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; }
+.pl-imp-values { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-imp-val { font-size: 11.5px; padding: 3px 9px; border-radius: 99px; background: var(--white); border: 1px solid var(--gray-200); color: var(--gray-700, var(--gray-600)); }
+.pl-imp-val b { color: var(--gray-800); margin-left: 2px; }
+.pl-imp-val.new { border-style: dashed; border-color: var(--red); color: var(--red); }
+.pl-imp-val.new b { color: var(--red); }
+.pl-imp-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gray-700, var(--gray-600)); cursor: pointer; }
+.pl-imp-check input { accent-color: var(--red); }
+.pl-imp-stage { font-weight: 600; color: var(--gray-800); }
