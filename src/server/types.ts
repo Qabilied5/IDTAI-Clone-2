@@ -211,6 +211,7 @@ export interface PipelineDeal {
   date: string;
   notes: string;
   activity: PipelineActivity[];
+  leadId?: number | null;
 }
 
 export interface PipelineStage {

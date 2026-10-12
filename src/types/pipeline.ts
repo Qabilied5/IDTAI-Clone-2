@@ -20,6 +20,8 @@ export interface PipelineDeal {
   date: string;
   notes: string;
   activity: PipelineActivity[];
+  /** ID baris di Google Sheet Kontak / Leads (null/undefined = deal manual). */
+  leadId?: number | null;
 }
 
 export interface PipelineStage {
@@ -28,7 +30,16 @@ export interface PipelineStage {
 }
 
 /** Field yang diisi lewat form "Tambah Deal" — id & activity di-generate backend. */
-export type NewPipelineDeal = Omit<PipelineDeal, "id" | "activity">;
+export type NewPipelineDeal = Omit<PipelineDeal, "id" | "activity" | "leadId">;
+
+/** Deal hasil konversi lead — dikirim ke /api/pipeline/import-leads. */
+export interface LeadDealInput extends NewPipelineDeal {
+  leadId: number;
+  /** Nama/ID stage dari kolom "Pipeline Stage" di sheet (opsional). */
+  stageHint?: string;
+  /** Lead berstatus Closed → masuk stage Won. */
+  closed?: boolean;
+}
 
 export interface PipelineInsightItem {
   type?: string;

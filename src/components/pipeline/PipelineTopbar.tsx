@@ -1,6 +1,6 @@
 "use client";
 
-import { Kanban, Layers, Plus, RefreshCw, Search, Sparkles, TrendingUp } from "lucide-react";
+import { Kanban, Layers, Table2, Plus, RefreshCw, Search, Sparkles, TrendingUp } from "lucide-react";
 
 import { TYPE_OPTIONS, picLabel, type PipelineFilters } from "@/lib/pipeline";
 
@@ -18,6 +18,7 @@ interface Props {
   onToggleAI: () => void;
   onAddStage: () => void;
   onAddDeal: () => void;
+  onImportLeads: () => void;
 }
 
 export function PipelineTopbar(p: Props) {
@@ -78,6 +79,9 @@ export function PipelineTopbar(p: Props) {
         >
           <PlIcon icon={Sparkles} />
           <span>{p.showAI ? "Hide AI Insights" : "Show AI Insights"}</span>
+        </button>
+        <button type="button" className="pl-btn pl-btn-ghost" onClick={p.onImportLeads} title="Impor deal dari Google Sheet Kontak / Leads">
+          <PlIcon icon={Table2} /> Import dari Leads
         </button>
         <button type="button" className="pl-btn pl-btn-ghost" onClick={p.onAddStage}>
           <PlIcon icon={Kanban} /> Tambah Stage

@@ -18,6 +18,7 @@ import { AddStageModal } from "./AddStageModal";
 import { DealDrawer } from "./DealDrawer";
 import { DealFormModal } from "./DealFormModal";
 import { FloatingMenu } from "./FloatingMenu";
+import { ImportLeadsModal } from "./ImportLeadsModal";
 import { KanbanBoard } from "./KanbanBoard";
 import { PipelineAIPanel } from "./PipelineAIPanel";
 import { PipelineFlowBar } from "./PipelineFlowBar";
@@ -35,6 +36,7 @@ export function PipelineContent() {
   const {
     deals, stages, isLoading, error,
     createDeal, updateDeal, moveDeal, deleteDeal, addStage, deleteStage, reorderStages,
+    importLeads, sheetNotice,
     insights, insightsLoading, insightsError, loadInsights, refresh,
   } = usePipeline();
   const { agents } = useAgents({ pollIntervalMs: 30000 });
@@ -43,6 +45,7 @@ export function PipelineContent() {
   const [showAI, setShowAI] = useState(true);
   const [dealModal, setDealModal] = useState<{ dealId: string | null; stage?: string } | null>(null);
   const [stageModalOpen, setStageModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [cardMenu, setCardMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [stageMenu, setStageMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -89,6 +92,11 @@ export function PipelineContent() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3500);
   }, []);
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
+
+  /* Hasil sync stage → Google Sheet (dari usePipeline) tampil sebagai toast. */
+  useEffect(() => {
+    if (sheetNotice) showToast(sheetNotice.msg, sheetNotice.type);
+  }, [sheetNotice, showToast]);
 
   /** Jalankan aksi async; error apa pun jadi toast (bukan unhandled rejection). */
   const run = useCallback(
@@ -141,9 +149,10 @@ export function PipelineContent() {
   const duplicate = (id: string) => {
     const src = deals.find((d) => d.id === id);
     if (!src) return;
-    const { id: _id, activity: _activity, ...fields } = src;
+    const { id: _id, activity: _activity, leadId: _leadId, ...fields } = src;
     void _id;
     void _activity;
+    void _leadId; // salinan = deal manual, tidak terhubung ke baris Sheet yang sama
     void run(() => createDeal({ ...fields, company: `${src.company} (Salinan)`, date: new Date().toISOString().slice(0, 10) }), "Deal diduplikat.");
   };
 
@@ -164,6 +173,8 @@ export function PipelineContent() {
   const closeStageMenu = useCallback(() => setStageMenu(null), []);
   const closeDealModal = useCallback(() => setDealModal(null), []);
   const closeStageModal = useCallback(() => setStageModalOpen(false), []);
+  const closeImport = useCallback(() => setImportOpen(false), []);
+  const linkedLeadIds = useMemo(() => new Set(deals.map((d) => d.leadId).filter((v): v is number => v != null)), [deals]);
   const closeDrawer = useCallback(() => setDrawerId(null), []);
 
   if (isLoading) {
@@ -200,6 +211,7 @@ export function PipelineContent() {
         onToggleAI={toggleAI}
         onAddStage={() => setStageModalOpen(true)}
         onAddDeal={() => setDealModal({ dealId: null })}
+        onImportLeads={() => setImportOpen(true)}
       />
 
       {stages.length > 0 && <PipelineFlowBar deals={deals} stages={stages} />}
@@ -257,6 +269,18 @@ export function PipelineContent() {
             onSubmit={async (label) => {
               await addStage(label);
               showToast("Stage ditambahkan.");
+            }}
+          />
+        )}
+
+        {importOpen && (
+          <ImportLeadsModal
+            existingLeadIds={linkedLeadIds}
+            onClose={closeImport}
+            onImport={async (inputs) => {
+              const r = await importLeads(inputs);
+              showToast(r.created > 0 ? `${r.created} lead diimpor ke pipeline${r.skipped ? `, ${r.skipped} dilewati` : ""}.` : "Semua lead terpilih sudah ada di pipeline.");
+              return r;
             }}
           />
         )}

@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type {
+  LeadDealInput,
   NewPipelineDeal,
   PipelineDeal,
   PipelineInsights,
@@ -75,4 +76,14 @@ export async function fetchPipelineInsights(
     body: JSON.stringify({ deals, stages: stages.map((s) => s.label) }),
   });
   return { summary: res.summary, insights: res.insights, forecast: res.forecast };
+}
+
+export async function importLeadDeals(
+  deals: LeadDealInput[]
+): Promise<{ created: PipelineDeal[]; skipped: number }> {
+  const res = await apiFetch<{ ok: boolean; created: PipelineDeal[]; skipped: number }>(
+    "/pipeline/import-leads",
+    { method: "POST", body: JSON.stringify({ deals }) }
+  );
+  return { created: res.created, skipped: res.skipped };
 }

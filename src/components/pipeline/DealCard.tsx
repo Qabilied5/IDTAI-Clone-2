@@ -56,6 +56,7 @@ function DealCardBase({ deal: d, isWon, onOpen, onMenu, onStartDrag }: Props) {
       <div className="pl-card-tags">
         <span className={`pl-tag ${TYPE_TAG_CLASS[d.type] ?? "pl-tag-new"}`}>{TYPE_NAMES[d.type] ?? d.type}</span>
         {d.recurring && <span className="pl-tag pl-tag-recurring">Recurring</span>}
+        {d.leadId != null && <span className="pl-tag pl-tag-lead" title="Terhubung ke Google Sheet Kontak / Leads">Leads</span>}
       </div>
 
       <div className="pl-card-footer">
