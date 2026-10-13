@@ -25,6 +25,7 @@ export interface BackendState {
 
   wabaBotInfo: { verified_name?: string; display_phone_number?: string } | null;
   calendlyUserInfo: { uri: string; name: string; email: string; organizationUri: string } | null;
+  calendlyEventType: { uri: string; name: string; duration: number | null; schedulingUrl: string } | null;
   calendlyLastPolledAt: string | null;
   calKnownEventUris: Set<string>;
 
@@ -69,6 +70,7 @@ function freshState(): BackendState {
 
     wabaBotInfo: null,
     calendlyUserInfo: null,
+    calendlyEventType: null,
     calendlyLastPolledAt: null,
     calKnownEventUris: new Set(),
 

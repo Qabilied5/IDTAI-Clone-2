@@ -4,12 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import { apiFetch, ApiError } from "@/lib/api";
 import { INTEGRATIONS_CATALOG } from "@/lib/integrations";
-import type { Integration, TelegramStatus, WabaStatus } from "@/types/integration";
+import { calendlyClearStored, calendlySaveStored } from "@/lib/calendly-config";
+import type {
+  CalendlyConfigResponse, CalendlyStatus, Integration, TelegramStatus, WabaStatus,
+} from "@/types/integration";
 
 /** Integrasi yang punya backend sungguhan (Route Handler port dari server.js). */
 const BACKEND_CONFIG_PATH: Record<string, string> = {
   telegram: "/telegram/config",
   whatsapp: "/waba/config",
+  calendly: "/calendly/config",
 };
 
 /**
@@ -23,9 +27,10 @@ export function useIntegrations() {
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [tg, wb] = await Promise.all([
+    const [tg, wb, cal] = await Promise.all([
       apiFetch<TelegramStatus>("/telegram/status").catch(() => null),
       apiFetch<WabaStatus>("/waba/status").catch(() => null),
+      apiFetch<CalendlyStatus>("/calendly/status").catch(() => null),
     ]);
 
     setIntegrations((prev) =>
@@ -60,6 +65,24 @@ export function useIntegrations() {
               : undefined,
           };
         }
+        if (item.id === "calendly" && cal) {
+          const et = cal.eventType;
+          return {
+            ...item,
+            status: cal.configured ? "connected" : "disconnected",
+            connectedInfo: cal.configured
+              ? {
+                  account: cal.user?.email ? `${cal.user.name || "-"} (${cal.user.email})` : cal.user?.name || "-",
+                  since: "-",
+                  messages: "-",
+                  lastStatus: "Aktif \u2014 slot & booking via Calendly API",
+                  extra: et?.name
+                    ? [{ label: "Event type", value: `${et.name}${et.duration ? ` \u00b7 ${et.duration} menit` : ""}` }]
+                    : undefined,
+                }
+              : undefined,
+          };
+        }
         return item;
       })
     );
@@ -81,7 +104,12 @@ export function useIntegrations() {
         return null;
       }
       try {
-        await apiFetch(path, { method: "POST", body: JSON.stringify(values) });
+        const res = await apiFetch<CalendlyConfigResponse>(path, { method: "POST", body: JSON.stringify(values) });
+        // Server menyimpan kredensial hanya di memori — simpan salinan di browser
+        // supaya bisa dikirim ulang otomatis setelah server restart (lihat WabaAutoSync).
+        if (id === "calendly" && res?.eventType?.uri) {
+          calendlySaveStored({ token: (values.token || "").trim(), eventTypeUri: res.eventType.uri });
+        }
         await refresh();
         return null;
       } catch (e) {
@@ -104,6 +132,7 @@ export function useIntegrations() {
       }
       try {
         await apiFetch(path, { method: "DELETE" });
+        if (id === "calendly") calendlyClearStored();
         await refresh();
         return null;
       } catch (e) {

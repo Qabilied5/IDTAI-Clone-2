@@ -45,6 +45,37 @@ export const INTEGRATIONS_CATALOG: Integration[] = [
     ],
   },
   {
+    id: "calendly",
+    name: "Calendly",
+    category: "tools",
+    emoji: "\ud83d\udcc5",
+    description:
+      "AI Agent mengatur jadwal meeting langsung di chat: customer cukup memilih minggu, tanggal, dan jam lewat tombol, lalu booking masuk ke kalender Anda.",
+    features: [
+      "Booking otomatis dari chat",
+      "Slot real-time dari kalender",
+      "Appointment tercatat otomatis",
+      "Booking langsung butuh Calendly plan berbayar (Standard ke atas)",
+    ],
+    status: "disconnected",
+    configFields: [
+      {
+        key: "token",
+        label: "Personal Access Token",
+        type: "password",
+        placeholder: "Tempel token Calendly di sini",
+        hint: "Calendly \u2192 Integrations \u2192 API & webhooks \u2192 Personal access tokens.",
+      },
+      {
+        key: "eventTypeUri",
+        label: "Event Type (link Calendly, opsional jika hanya punya satu)",
+        type: "text",
+        placeholder: "https://calendly.com/nama-anda/konsultasi",
+        hint: "Salin link event type dari Calendly. URI API (https://api.calendly.com/event_types/...) juga diterima.",
+      },
+    ],
+  },
+  {
     id: "instagram",
     name: "Instagram DM",
     category: "messaging",

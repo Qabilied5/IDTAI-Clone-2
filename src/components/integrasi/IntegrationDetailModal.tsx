@@ -88,6 +88,7 @@ export function IntegrationDetailModal({
                       onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                       className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-xs outline-none focus:border-accent"
                     />
+                    {f.hint && <p className="mt-1 text-[10.5px] leading-snug text-neutral-400">{f.hint}</p>}
                   </div>
                 ))}
               </div>
@@ -106,6 +107,9 @@ export function IntegrationDetailModal({
               <InfoRow label="Terhubung sejak" value={integration.connectedInfo.since} />
               <InfoRow label="Pesan terproses" value={integration.connectedInfo.messages} />
               <InfoRow label="Status terakhir" value={integration.connectedInfo.lastStatus} />
+              {integration.connectedInfo.extra?.map((row) => (
+                <InfoRow key={row.label} label={row.label} value={row.value} />
+              ))}
             </div>
           )}
 

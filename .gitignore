@@ -11,3 +11,6 @@ npm-debug.log*
 .DS_Store
 *.tsbuildinfo
 integrasi-calendly.zip
+
+env-keys.txt
+login-files.zip

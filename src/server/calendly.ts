@@ -410,18 +410,88 @@ export async function calendlyPollNewBookings() {
   }
 }
 
+/* ── Konfigurasi dari halaman Integrasi ─────────────────────────────────
+   Event Type boleh diisi: (a) URI API  https://api.calendly.com/event_types/XXXX
+   (b) link Calendly biasa  https://calendly.com/nama/30min  (c) slug "30min"
+   (d) kosong — dipakai hanya bila akun punya SATU event type aktif.
+   Supaya pengguna tidak perlu mencari URI API sendiri. */
+
+export interface CalendlyEventTypeInfo {
+  uri: string;
+  name: string;
+  duration: number | null;
+  schedulingUrl: string;
+}
+
+function toEventTypeInfo(r: any): CalendlyEventTypeInfo {
+  return {
+    uri: r.uri,
+    name: r.name || '-',
+    duration: typeof r.duration === 'number' ? r.duration : null,
+    schedulingUrl: r.scheduling_url || '',
+  };
+}
+
+function badRequest(message: string) {
+  return Object.assign(new Error(message), { status: 400 });
+}
+
+async function calendlyGetWithToken(token: string, path: string): Promise<any> {
+  const res = await xfetch(`${CALENDLY_API_BASE}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw badRequest((data.message || data.title) || `Calendly API error ${res.status}`);
+  return data;
+}
+
+const normUrl = (u: string) => u.trim().toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
+
+export async function calendlyResolveEventType(token: string, userUri: string, input: string): Promise<CalendlyEventTypeInfo> {
+  const raw = (input || '').trim();
+
+  // (a) URI API → ambil langsung (sekaligus memastikan token berhak mengaksesnya)
+  if (/^https:\/\/api\.calendly\.com\/event_types\/[\w-]+$/i.test(raw)) {
+    try {
+      const data = await calendlyGetWithToken(token, raw.replace(CALENDLY_API_BASE, ''));
+      return toEventTypeInfo(data.resource);
+    } catch (e) {
+      throw badRequest(`Event type tidak ditemukan atau token tidak berhak mengaksesnya (${(e as Error).message}).`);
+    }
+  }
+
+  const qs = new URLSearchParams({ user: userUri, active: 'true', count: '100' });
+  const data = await calendlyGetWithToken(token, `/event_types?${qs.toString()}`);
+  const list: any[] = data.collection || [];
+  if (!list.length) throw badRequest('Akun Calendly ini belum punya event type aktif. Buat dulu di Calendly, lalu coba lagi.');
+
+  const available = list.slice(0, 5).map((e) => `• ${e.name}: ${e.scheduling_url}`).join('\n');
+
+  if (!raw) {
+    if (list.length === 1) return toEventTypeInfo(list[0]);
+    throw badRequest(`Akun punya ${list.length} event type — isi salah satu link-nya:\n${available}`);
+  }
+
+  // (b) link publik / (c) slug
+  const want = normUrl(raw);
+  const slug = want.split('/').pop() || want;
+  const hit = list.find((e) => normUrl(e.scheduling_url || '') === want) || list.find((e) => String(e.slug || '').toLowerCase() === slug);
+  if (!hit) throw badRequest(`Event type "${raw}" tidak ditemukan di akun ini. Yang tersedia:\n${available}`);
+  return toEventTypeInfo(hit);
+}
+
 /* Simpan kredensial runtime (dipanggil POST /api/calendly/config). */
-export async function calendlySetConfig(token: string, eventTypeUri: string) {
+export async function calendlySetConfig(token: string, eventTypeInput: string) {
   const meRes = await xfetch(`${CALENDLY_API_BASE}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
   const meData: any = await meRes.json().catch(() => ({}));
   if (!meRes.ok || !meData.resource) {
     throw Object.assign(new Error((meData.message || meData.title) || 'Token tidak valid'), { status: 400 });
   }
 
-  const credentialsChanged = token !== state.CALENDLY_ACCESS_TOKEN || eventTypeUri !== state.CALENDLY_EVENT_TYPE_URI;
+  const eventType = await calendlyResolveEventType(token, meData.resource.uri, eventTypeInput);
+  const credentialsChanged = token !== state.CALENDLY_ACCESS_TOKEN || eventType.uri !== state.CALENDLY_EVENT_TYPE_URI;
 
   state.CALENDLY_ACCESS_TOKEN = token;
-  state.CALENDLY_EVENT_TYPE_URI = eventTypeUri;
+  state.CALENDLY_EVENT_TYPE_URI = eventType.uri;
+  state.calendlyEventType = eventType;
   state.calendlyUserInfo = {
     uri: meData.resource.uri,
     name: meData.resource.name,
@@ -433,13 +503,14 @@ export async function calendlySetConfig(token: string, eventTypeUri: string) {
     state.calendlyLastPolledAt = null;
     state.calKnownEventUris.clear();
   }
-  return state.calendlyUserInfo;
+  return { user: state.calendlyUserInfo, eventType };
 }
 
 export function calendlyClearConfig() {
   state.CALENDLY_ACCESS_TOKEN = '';
   state.CALENDLY_EVENT_TYPE_URI = '';
   state.calendlyUserInfo = null;
+  state.calendlyEventType = null;
   state.calendlyLastPolledAt = null;
   state.calKnownEventUris.clear();
 }
