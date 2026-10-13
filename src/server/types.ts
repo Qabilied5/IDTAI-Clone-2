@@ -35,12 +35,27 @@ export interface TimeSlot {
   schedulingUrl?: string;
 }
 
+export type SchedStage =
+  | 'idle'
+  | 'awaiting_range'
+  | 'awaiting_date'
+  | 'awaiting_time'
+  | 'awaiting_email'
+  | 'awaiting_confirm';
+
 export interface SchedulingState {
-  stage: 'idle' | 'awaiting_range' | 'awaiting_date' | 'awaiting_time';
+  stage: SchedStage;
   offeredDates: DateChoice[];
   offeredTimes: TimeSlot[];
   meetingType: string | null;
   rangeKey: string | null;
+  /* Slot yang dipilih customer, menunggu email/konfirmasi sebelum di-booking. */
+  chosenSlot?: TimeSlot | null;
+  /* Pesan + tombol terakhir yang dikirim — dipakai untuk mengulang prompt saat
+     customer mengetik teks bebas / menekan tombol lama di tengah alur. */
+  lastPrompt?: { text: string; options: SchedOption[] } | null;
+  /* true selama request booking ke Calendly berjalan (cegah double-tap). */
+  booking?: boolean;
 }
 
 export interface Conversation {
@@ -57,6 +72,8 @@ export interface Conversation {
   messages: ChatMessage[];
   provider?: 'telegram' | 'whatsapp';
   scheduling?: SchedulingState;
+  /* Email customer (dikumpulkan sekali saat booking, dipakai ulang). */
+  email?: string | null;
   escalated?: boolean;
   escalationReason?: string | null;
   escalatedAt?: number | null;
@@ -172,6 +189,7 @@ export interface AiAppointment {
   chatId: string | null;
   leadId: string | null;
   calendlyEventUri?: string | null;
+  calendlyInviteeUri?: string | null;
   timeline: TimelineItem[];
 }
 

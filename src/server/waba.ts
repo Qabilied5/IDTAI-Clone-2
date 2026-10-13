@@ -16,6 +16,45 @@ function assertConfigured() {
   if (!wabaConfigured()) throw new Error('WABA belum dikonfigurasi (Access Token / Phone Number ID kosong)');
 }
 
+/* Batas body pesan interactive WhatsApp = 1024 karakter (lebih → ditolak Meta). */
+const clipBody = (t: string) => (t.length > 1024 ? `${t.slice(0, 1021)}...` : t);
+
+/* Email di teks tidak boleh memicu eskalasi — mis. "admin@pt-maju.com" mengandung
+   kata kunci "admin" dan akan memindahkan chat ke agent di tengah booking. */
+const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+/* Webhook Meta bisa dikirim ulang (retry), dan customer bisa menekan tombol dua
+   kali beruntun. Karena itu: (1) pesan yang id-nya sudah pernah diproses dibuang,
+   (2) pesan per-chat diproses SATU PER SATU supaya state penjadwalan tidak balapan.
+   Disimpan di globalThis agar selamat dari reload modul (HMR) di dev. */
+const gw = globalThis as unknown as {
+  __idtaiWabaSeen?: Map<string, number>;
+  __idtaiWabaQueues?: Map<string, Promise<void>>;
+};
+const seenMsgIds: Map<string, number> = (gw.__idtaiWabaSeen ??= new Map());
+const chatQueues: Map<string, Promise<void>> = (gw.__idtaiWabaQueues ??= new Map());
+const SEEN_TTL_MS = 60 * 60 * 1000;
+
+function wabaAlreadySeen(id?: string): boolean {
+  if (!id) return false;
+  const now = Date.now();
+  if (seenMsgIds.size > 500) {
+    for (const [k, t] of seenMsgIds) if (now - t > SEEN_TTL_MS) seenMsgIds.delete(k);
+  }
+  if (seenMsgIds.has(id)) return true;
+  seenMsgIds.set(id, now);
+  return false;
+}
+
+function wabaEnqueue(chatId: string, job: () => Promise<void>) {
+  const prev = chatQueues.get(chatId) || Promise.resolve();
+  const next: Promise<void> = prev
+    .then(job)
+    .catch((err) => console.error('[WABA] Gagal proses pesan masuk:', (err as Error).message))
+    .finally(() => { if (chatQueues.get(chatId) === next) chatQueues.delete(chatId); });
+  chatQueues.set(chatId, next);
+}
+
 async function wabaPost(payload: unknown) {
   const url = `${WABA_GRAPH_BASE}/${state.WABA_PHONE_NUMBER_ID}/messages`;
   const res = await xfetch(url, {
@@ -48,7 +87,7 @@ async function wabaSendInteractiveButtons(to: string, bodyText: string, options:
   const buttons = options.slice(0, 3).map((o) => ({ type: 'reply', reply: { id: o.id, title: (o.label || '').slice(0, 20) } }));
   return wabaSendInteractiveRaw({
     messaging_product: 'whatsapp', to, type: 'interactive',
-    interactive: { type: 'button', body: { text: bodyText }, action: { buttons } },
+    interactive: { type: 'button', body: { text: clipBody(bodyText) }, action: { buttons } },
   });
 }
 
@@ -58,7 +97,7 @@ async function wabaSendInteractiveList(to: string, bodyText: string, options: Sc
     messaging_product: 'whatsapp', to, type: 'interactive',
     interactive: {
       type: 'list',
-      body: { text: bodyText },
+      body: { text: clipBody(bodyText) },
       action: { button: (buttonLabel || 'Pilih').slice(0, 20), sections: [{ title: 'Pilihan', rows }] },
     },
   });
@@ -69,7 +108,7 @@ async function wabaSendCtaUrl(to: string, bodyText: string, buttonLabel: string,
     messaging_product: 'whatsapp', to, type: 'interactive',
     interactive: {
       type: 'cta_url',
-      body: { text: bodyText },
+      body: { text: clipBody(bodyText) },
       action: { name: 'cta_url', parameters: { display_text: (buttonLabel || 'Buka Link').slice(0, 20), url } },
     },
   });
@@ -127,6 +166,10 @@ export function wabaGetOrCreateConversation(waId: string, profileName?: string):
 }
 
 export async function wabaProcessIncomingMessage(message: any, contactProfile?: any) {
+  if (wabaAlreadySeen(message.id)) {
+    console.log('[WABA] Pesan duplikat (retry webhook / tap ganda) dilewati:', message.id);
+    return;
+  }
   const waId: string = message.from;
   const conv = wabaGetOrCreateConversation(waId, contactProfile && contactProfile.name);
 
@@ -165,7 +208,7 @@ export async function wabaProcessIncomingMessage(message: any, contactProfile?: 
   conv.lastMessageTime = incomingTime;
   conv.unread += 1;
 
-  if (escCheckIncoming(conv, message.text.body, (text) => sendViaWaba(conv.chatId, text))) return;
+  if (escCheckIncoming(conv, message.text.body.replace(EMAIL_IN_TEXT, ' '), (text) => sendViaWaba(conv.chatId, text))) return;
   if (conv.handledBy !== 'ai') return;
 
   try {
@@ -182,36 +225,38 @@ export async function wabaProcessIncomingMessage(message: any, contactProfile?: 
   }
 }
 
-/* Proses body webhook Meta (dipanggil setelah 200 dikirim). */
+/* Proses body webhook Meta (dipanggil setelah 200 dikirim). Meta bisa menggabung
+   beberapa entry/changes/messages dalam satu request — semuanya diproses. */
 export function wabaHandleWebhookBody(body: any) {
   try {
-    const entry = body.entry && body.entry[0];
-    const change = entry && entry.changes && entry.changes[0];
-    const value = change && change.value;
-    const messages = value && value.messages;
-    const statuses = value && value.statuses;
-    const contacts = value && value.contacts;
+    const entries: any[] = Array.isArray(body && body.entry) ? body.entry : [];
+    for (const entry of entries) {
+      const changes: any[] = Array.isArray(entry && entry.changes) ? entry.changes : [];
+      for (const change of changes) {
+        const value = change && change.value;
+        if (!value) continue;
+        const { messages, statuses, contacts } = value;
 
-    const profileByWaId: Record<string, any> = {};
-    if (Array.isArray(contacts)) {
-      contacts.forEach((c: any) => { if (c.wa_id) profileByWaId[c.wa_id] = c.profile || {}; });
-    }
+        const profileByWaId: Record<string, any> = {};
+        if (Array.isArray(contacts)) {
+          contacts.forEach((c: any) => { if (c.wa_id) profileByWaId[c.wa_id] = c.profile || {}; });
+        }
 
-    if (Array.isArray(messages)) {
-      messages.forEach((m: any) => {
-        const bodyText = (m.text && m.text.body) || `[${m.type}]`;
-        console.log('[WABA] Pesan masuk dari', m.from, ':', bodyText);
-        wabaProcessIncomingMessage(m, profileByWaId[m.from]).catch((err) => {
-          console.error('[WABA] Gagal proses pesan masuk:', (err as Error).message);
-        });
-      });
-    }
+        if (Array.isArray(messages)) {
+          messages.forEach((m: any) => {
+            const bodyText = (m.text && m.text.body) || `[${m.type}]`;
+            console.log('[WABA] Pesan masuk dari', m.from, ':', bodyText);
+            wabaEnqueue(String(m.from), () => wabaProcessIncomingMessage(m, profileByWaId[m.from]));
+          });
+        }
 
-    if (Array.isArray(statuses)) {
-      statuses.forEach((s: any) => {
-        console.log(`[WABA] Status pesan ${s.id} ke ${s.recipient_id}: ${s.status}`);
-        if (s.errors) console.log('[WABA] Detail error:', JSON.stringify(s.errors));
-      });
+        if (Array.isArray(statuses)) {
+          statuses.forEach((st: any) => {
+            console.log(`[WABA] Status pesan ${st.id} ke ${st.recipient_id}: ${st.status}`);
+            if (st.errors) console.log('[WABA] Detail error:', JSON.stringify(st.errors));
+          });
+        }
+      }
     }
   } catch (err) {
     console.error('[WABA] Gagal proses webhook:', (err as Error).message);

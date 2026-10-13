@@ -9,6 +9,17 @@ import { xfetch } from './fetch';
 import { calendlyConfigured, state } from './state';
 import type { AiAppointment, DateChoice, TimeSlot } from './types';
 
+/* Error API Calendly + status HTTP-nya — dipakai alur booking otomatis untuk
+   membedakan "plan Free (403)" vs "slot sudah terisi (409/400)" vs error lain. */
+export class CalendlyApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'CalendlyApiError';
+    this.status = status;
+  }
+}
+
 export async function calendlyFetch(pathOrUrl: string, options: RequestInit = {}): Promise<any> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${CALENDLY_API_BASE}${pathOrUrl}`;
   const res = await xfetch(url, {
@@ -22,7 +33,7 @@ export async function calendlyFetch(pathOrUrl: string, options: RequestInit = {}
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     console.error('[Calendly] API error, detail lengkap:', res.status, JSON.stringify(data));
-    throw new Error(data.message || data.title || `Calendly API error ${res.status}`);
+    throw new CalendlyApiError(data.message || data.title || `Calendly API error ${res.status}`, res.status);
   }
   return data;
 }
@@ -144,6 +155,132 @@ export async function calendlyCreateSchedulingLink(): Promise<string | undefined
     }),
   });
   return data.resource && data.resource.booking_url;
+}
+
+/* ── BOOKING OTOMATIS (Calendly Scheduling API: POST /invitees) ───────────
+   Membuat event langsung dari chat tanpa customer membuka halaman Calendly.
+   SYARAT: akun Calendly plan berbayar (Standard ke atas) dan token punya
+   scope `scheduled_events:write`. Plan Free → 403 (ditangani pemanggil
+   dengan fallback ke link booking). */
+
+/* Lokasi event type harus ikut dikirim bila event type-nya punya lokasi
+   (aturan API: kind wajib bila location diisi, dan harus sama dengan lokasi
+   di event type; jangan dikirim untuk event type round_robin). Kalau event
+   type tidak punya lokasi, location dihilangkan. */
+async function calendlyGetBookingLocation(inviteePhone?: string): Promise<Record<string, unknown> | undefined> {
+  try {
+    const data = await calendlyFetch(state.CALENDLY_EVENT_TYPE_URI);
+    const et = data && data.resource;
+    if (!et || et.pooling_type === 'round_robin') return undefined;
+    const loc = Array.isArray(et.locations) ? et.locations[0] : null;
+    if (!loc || !loc.kind) return undefined;
+
+    switch (loc.kind) {
+      case 'physical':
+      case 'custom':
+      case 'inbound_call':
+        return loc.location ? { kind: loc.kind, location: loc.location } : { kind: loc.kind };
+      case 'outbound_call':
+        return inviteePhone ? { kind: loc.kind, location: inviteePhone } : undefined;
+      case 'ask_invitee':
+        return { kind: loc.kind, location: 'Akan dikonfirmasi oleh tim kami' };
+      default:
+        // zoom_conference, google_conference, microsoft_teams_conference, dst.
+        return { kind: loc.kind };
+    }
+  } catch (e) {
+    console.error('[Calendly] Gagal membaca lokasi event type, booking dicoba tanpa location:', (e as Error).message);
+    return undefined;
+  }
+}
+
+export interface CalendlyBookingInput {
+  startTime: string; // ISO UTC, persis dari event_type_available_times
+  name: string;
+  email: string;
+  phone?: string;
+  timezone?: string;
+}
+
+export async function calendlyCreateBooking(input: CalendlyBookingInput): Promise<{ eventUri: string; inviteeUri: string }> {
+  const location = await calendlyGetBookingLocation(input.phone);
+  const body: Record<string, unknown> = {
+    event_type: state.CALENDLY_EVENT_TYPE_URI,
+    start_time: input.startTime,
+    invitee: { name: input.name, email: input.email, timezone: input.timezone || 'Asia/Jakarta' },
+  };
+  if (location) body.location = location;
+
+  const data = await calendlyFetch('/invitees', { method: 'POST', body: JSON.stringify(body) });
+  const r = (data && data.resource) || {};
+  const eventUri: string = r.event || '';
+  // Tandai SEGERA (sinkron) supaya polling 2-menit tidak membuat appointment ganda.
+  if (eventUri) state.calKnownEventUris.add(eventUri);
+  return { eventUri, inviteeUri: r.uri || '' };
+}
+
+export interface AutoBookingRecordInput {
+  chatId: string;
+  provider: 'telegram' | 'whatsapp';
+  name: string;
+  phone: string;
+  email: string;
+  startTime: string;
+  meetingType: string;
+  eventUri: string;
+  inviteeUri: string;
+}
+
+/* Catat appointment hasil booking otomatis lewat chat. Dibuat SEGERA setelah
+   Calendly menjawab (sebelum link meeting siap) supaya webhook/polling yang
+   datang belakangan menemukan record ini lewat calendlyEventUri dan tidak
+   membuat duplikat. */
+export function apptCreateFromAutoBooking(input: AutoBookingRecordInput): AiAppointment {
+  const startIso = input.startTime;
+  const dateStr = new Date(startIso).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const timeStr = new Date(startIso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jakarta' });
+  const channel = input.provider === 'whatsapp' ? 'WhatsApp' : 'Telegram';
+  const slotLabel = calendlyFormatSlotLabel(startIso);
+
+  const record: AiAppointment = {
+    id: `ai-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    nama: input.name,
+    company: '-',
+    phone: input.phone || '-',
+    email: input.email,
+    date: dateStr,
+    time: timeStr,
+    duration: APPT_DEFAULT_DURATION,
+    type: input.meetingType,
+    typeLabel: apptTypeLabel(input.meetingType),
+    sales: APPT_DEFAULT_STAFF,
+    status: 'terkonfirmasi',
+    createdBy: 'ai',
+    location: '',
+    notes: `Dibooking otomatis dari percakapan ${channel} (chat ID ${input.chatId}).`,
+    aiNote: `Jadwal dipilih customer lewat tombol di chat ${channel}, lalu AI membuat booking langsung di Calendly — sudah terkonfirmasi dan undangan dikirim ke ${input.email}. Tentukan PIC dan kirim follow-up bila perlu.`,
+    chatId: input.chatId,
+    leadId: null,
+    calendlyEventUri: input.eventUri || null,
+    calendlyInviteeUri: input.inviteeUri || null,
+    timeline: [
+      { type: 'ai', event: `AI menawarkan jadwal via ${channel}`, sub: 'Customer memilih minggu, tanggal, dan jam lewat tombol', time: 'Baru saja' },
+      { type: 'success', event: 'Customer memilih & mengonfirmasi jadwal', sub: slotLabel, time: 'Baru saja' },
+      { type: 'success', event: 'AI membuat booking di Calendly', sub: `Terkonfirmasi — undangan dikirim ke ${input.email}. PIC sementara: ${APPT_DEFAULT_STAFF}`, time: 'Baru saja' },
+    ],
+  };
+  state.aiAppointments.push(record);
+  return record;
+}
+
+/* Isi link meeting (Zoom/Meet) ke record setelah Calendly selesai membuatnya. */
+export function apptAttachMeetingLink(record: AiAppointment, eventInfo: any) {
+  const loc = (eventInfo && eventInfo.location) || {};
+  const link: string = loc.join_url || loc.location || '';
+  if (!link) return '';
+  record.location = link;
+  record.timeline.push({ type: 'ai', event: 'Link meeting otomatis terisi', sub: link, time: 'Baru saja' });
+  return link;
 }
 
 /* Ambil ulang detail event beberapa kali sampai link Zoom/Meet siap. */
