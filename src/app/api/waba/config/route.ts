@@ -44,6 +44,10 @@ export async function POST(req: Request) {
 
 /* DELETE /api/waba/config — putuskan koneksi */
 export async function DELETE() {
-  wabaClearConfig();
-  return ok();
+  try {
+    await wabaClearConfig();
+    return ok();
+  } catch (err) {
+    return fail(errMsg(err), 500);
+  }
 }

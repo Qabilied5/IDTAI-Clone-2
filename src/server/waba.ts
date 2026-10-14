@@ -9,6 +9,9 @@ import { xfetch } from './fetch';
 import {
   handleMessageAndMaybeSchedule, schedFreshState, schedOptionsToPlainText, schedResolveButtonId,
 } from './scheduling';
+import { clearIntegration, saveIntegration } from './integration-store';
+import { currentOrgIdOrNull, requireOrgId, runWithOrg } from './org-context';
+import { findOrgByWabaPhoneNumberId, otherOrgHasWabaPhone } from './tenants';
 import { state, wabaConfigured } from './state';
 import type { Conversation, SchedOption } from './types';
 
@@ -46,7 +49,8 @@ function wabaAlreadySeen(id?: string): boolean {
   return false;
 }
 
-function wabaEnqueue(chatId: string, job: () => Promise<void>) {
+function wabaEnqueue(rawChatId: string, job: () => Promise<void>) {
+  const chatId = `${currentOrgIdOrNull() ?? 'default'}:${rawChatId}`;
   const prev = chatQueues.get(chatId) || Promise.resolve();
   const next: Promise<void> = prev
     .then(job)
@@ -235,27 +239,16 @@ export function wabaHandleWebhookBody(body: any) {
       for (const change of changes) {
         const value = change && change.value;
         if (!value) continue;
-        const { messages, statuses, contacts } = value;
 
-        const profileByWaId: Record<string, any> = {};
-        if (Array.isArray(contacts)) {
-          contacts.forEach((c: any) => { if (c.wa_id) profileByWaId[c.wa_id] = c.profile || {}; });
+        // Multi-perusahaan: tentukan pemilik pesan dari Phone Number ID tujuan webhook.
+        const phoneId = value.metadata && value.metadata.phone_number_id;
+        const orgId = phoneId ? findOrgByWabaPhoneNumberId(String(phoneId)) : null;
+        if (phoneId && !orgId) {
+          console.warn(`[WABA] Webhook untuk Phone Number ID ${phoneId} tidak cocok dengan perusahaan mana pun — diabaikan`);
+          continue;
         }
-
-        if (Array.isArray(messages)) {
-          messages.forEach((m: any) => {
-            const bodyText = (m.text && m.text.body) || `[${m.type}]`;
-            console.log('[WABA] Pesan masuk dari', m.from, ':', bodyText);
-            wabaEnqueue(String(m.from), () => wabaProcessIncomingMessage(m, profileByWaId[m.from]));
-          });
-        }
-
-        if (Array.isArray(statuses)) {
-          statuses.forEach((st: any) => {
-            console.log(`[WABA] Status pesan ${st.id} ke ${st.recipient_id}: ${st.status}`);
-            if (st.errors) console.log('[WABA] Detail error:', JSON.stringify(st.errors));
-          });
-        }
+        if (orgId) runWithOrg(orgId, () => wabaHandleChangeValue(value));
+        else wabaHandleChangeValue(value);
       }
     }
   } catch (err) {
@@ -263,22 +256,74 @@ export function wabaHandleWebhookBody(body: any) {
   }
 }
 
+function wabaHandleChangeValue(value: any) {
+  const { messages, statuses, contacts } = value;
+
+  const profileByWaId: Record<string, any> = {};
+  if (Array.isArray(contacts)) {
+    contacts.forEach((c: any) => { if (c.wa_id) profileByWaId[c.wa_id] = c.profile || {}; });
+  }
+
+  if (Array.isArray(messages)) {
+    messages.forEach((m: any) => {
+      const bodyText = (m.text && m.text.body) || `[${m.type}]`;
+      console.log('[WABA] Pesan masuk dari', m.from, ':', bodyText);
+      wabaEnqueue(String(m.from), () => wabaProcessIncomingMessage(m, profileByWaId[m.from]));
+    });
+  }
+
+  if (Array.isArray(statuses)) {
+    statuses.forEach((st: any) => {
+      console.log(`[WABA] Status pesan ${st.id} ke ${st.recipient_id}: ${st.status}`);
+      if (st.errors) console.log('[WABA] Detail error:', JSON.stringify(st.errors));
+    });
+  }
+}
+
 /* Validasi kredensial ke Meta lalu simpan (POST /api/waba/config). */
 export async function wabaSetConfig(input: { token: string; phoneNumberId: string; businessAccountId: string; verifyToken: string }) {
+  const orgId = requireOrgId();
+  if (otherOrgHasWabaPhone(orgId, input.phoneNumberId)) {
+    throw Object.assign(new Error('Phone Number ID ini sudah dipakai perusahaan lain.'), { status: 409 });
+  }
   const testUrl = `${WABA_GRAPH_BASE}/${input.phoneNumberId}?fields=display_phone_number,verified_name`;
   const testRes = await xfetch(testUrl, { headers: { Authorization: `Bearer ${input.token}` } });
   const testData = await testRes.json();
   if (testData.error) throw Object.assign(new Error(testData.error.message || 'Kredensial tidak valid'), { status: 400 });
 
+  const botInfo = { verified_name: testData.verified_name, display_phone_number: testData.display_phone_number };
+  const verifyToken = input.verifyToken || state.WABA_VERIFY_TOKEN;
+
+  // Simpan ke SQL Server DULU; kalau gagal, state tidak berubah dan error sampai ke UI.
+  await saveIntegration(
+    orgId,
+    'whatsapp',
+    {
+      token: input.token,
+      phoneNumberId: input.phoneNumberId,
+      businessAccountId: input.businessAccountId,
+      verifyToken,
+      botInfo: JSON.stringify(botInfo),
+    },
+    {
+      status: 'connected',
+      accountLabel: botInfo.display_phone_number
+        ? `${botInfo.display_phone_number}${botInfo.verified_name ? ` (${botInfo.verified_name})` : ''}`
+        : null,
+      lastStatus: 'Aktif — webhook /api/waba/webhook',
+    }
+  );
+
   state.WABA_ACCESS_TOKEN = input.token;
   state.WABA_PHONE_NUMBER_ID = input.phoneNumberId;
   state.WABA_BUSINESS_ACCOUNT_ID = input.businessAccountId;
   if (input.verifyToken) state.WABA_VERIFY_TOKEN = input.verifyToken;
-  state.wabaBotInfo = { verified_name: testData.verified_name, display_phone_number: testData.display_phone_number };
+  state.wabaBotInfo = botInfo;
   return state.wabaBotInfo;
 }
 
-export function wabaClearConfig() {
+export async function wabaClearConfig() {
+  await clearIntegration(requireOrgId(), 'whatsapp');
   state.WABA_ACCESS_TOKEN = '';
   state.WABA_PHONE_NUMBER_ID = '';
   state.WABA_BUSINESS_ACCOUNT_ID = '';

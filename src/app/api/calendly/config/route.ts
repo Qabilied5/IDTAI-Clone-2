@@ -36,6 +36,10 @@ export async function POST(req: Request) {
 
 /* DELETE /api/calendly/config — putuskan koneksi */
 export async function DELETE() {
-  calendlyClearConfig();
-  return ok();
+  try {
+    await calendlyClearConfig();
+    return ok();
+  } catch (err) {
+    return fail(errMsg(err), 500);
+  }
 }

@@ -12,6 +12,8 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   avatarInitials: string;
+  organizationId: string;
+  organizationName: string;
 }
 
 export interface AuthResponse {

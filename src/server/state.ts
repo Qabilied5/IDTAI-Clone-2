@@ -1,12 +1,13 @@
 /* =============================================================
    src/server/state.ts
-   Semua state mutable backend disimpan sebagai SINGLETON di globalThis.
-   Alasan: di Next.js, modul bisa di-reload (dev HMR) dan Route Handler
-   tidak punya "process global" seperti app.listen() di Express. Dengan
-   globalThis, state tetap satu instance selama proses Node hidup —
-   percakapan, token yang diinput dari halaman Integrasi, polling
-   Telegram, dsb tidak ke-reset antar request.
+   State mutable backend, SATU PER PERUSAHAAN (multi-tenant), disimpan di globalThis
+   (modul bisa di-reload saat dev HMR dan Route Handler tidak punya "process global").
+
+   `state` yang diekspor adalah Proxy: setiap akses (`state.tgConversations`, dst.)
+   otomatis diarahkan ke state milik perusahaan yang sedang aktif (lihat org-context.ts).
+   Dengan begitu seluruh kode lama yang memakai `state` tetap jalan tanpa diubah.
    ============================================================= */
+import { getDefaultOrgId, normOrgId, orgIdOrDefault } from './org-context';
 import type {
   AiAppointment, Conversation, CrawlJob, EscalationSettings, KbDoc, PicAgent, PipelineDeal,
   PipelineStage, SendLogEntry,
@@ -57,16 +58,24 @@ export interface BackendState {
   dataLoaded: boolean;
 }
 
-function freshState(): BackendState {
+/* Nilai .env hanya dipakai sebagai fallback awal untuk perusahaan DEFAULT. */
+function isDefaultOrg(orgId: string): boolean {
+  const d = getDefaultOrgId();
+  return d ? orgId === d : orgId === 'default';
+}
+
+function freshState(orgId: string): BackendState {
+  const env = isDefaultOrg(orgId);
+  const e = (k: string) => (env ? process.env[k] || '' : '');
   return {
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
-    TELEGRAM_DEFAULT_CHAT_ID: process.env.TELEGRAM_DEFAULT_CHAT_ID || '',
-    WABA_ACCESS_TOKEN: process.env.WABA_ACCESS_TOKEN || '',
-    WABA_PHONE_NUMBER_ID: process.env.WABA_PHONE_NUMBER_ID || '',
-    WABA_BUSINESS_ACCOUNT_ID: process.env.WABA_BUSINESS_ACCOUNT_ID || '',
-    WABA_VERIFY_TOKEN: process.env.WABA_VERIFY_TOKEN || '',
-    CALENDLY_ACCESS_TOKEN: process.env.CALENDLY_ACCESS_TOKEN || '',
-    CALENDLY_EVENT_TYPE_URI: process.env.CALENDLY_EVENT_TYPE_URI || '',
+    TELEGRAM_BOT_TOKEN: e('TELEGRAM_BOT_TOKEN'),
+    TELEGRAM_DEFAULT_CHAT_ID: e('TELEGRAM_DEFAULT_CHAT_ID'),
+    WABA_ACCESS_TOKEN: e('WABA_ACCESS_TOKEN'),
+    WABA_PHONE_NUMBER_ID: e('WABA_PHONE_NUMBER_ID'),
+    WABA_BUSINESS_ACCOUNT_ID: e('WABA_BUSINESS_ACCOUNT_ID'),
+    WABA_VERIFY_TOKEN: e('WABA_VERIFY_TOKEN'),
+    CALENDLY_ACCESS_TOKEN: e('CALENDLY_ACCESS_TOKEN'),
+    CALENDLY_EVENT_TYPE_URI: e('CALENDLY_EVENT_TYPE_URI'),
 
     wabaBotInfo: null,
     calendlyUserInfo: null,
@@ -124,10 +133,36 @@ function freshState(): BackendState {
   };
 }
 
-const g = globalThis as unknown as { __idtaiBackendState?: BackendState };
-if (!g.__idtaiBackendState) g.__idtaiBackendState = freshState();
+const g = globalThis as unknown as { __idtaiBackendStates?: Map<string, BackendState> };
+const registry: Map<string, BackendState> = (g.__idtaiBackendStates ??= new Map());
 
-export const state: BackendState = g.__idtaiBackendState;
+/** State milik satu perusahaan (dibuat bila belum ada). */
+export function getStateFor(orgId: string): BackendState {
+  const key = normOrgId(orgId);
+  let s = registry.get(key);
+  if (!s) {
+    s = freshState(key);
+    registry.set(key, s);
+  }
+  return s;
+}
+
+export function allOrgIds(): string[] { return [...registry.keys()]; }
+export function allStates(): [string, BackendState][] { return [...registry.entries()]; }
+
+function current(): BackendState { return getStateFor(orgIdOrDefault()); }
+
+export const state: BackendState = new Proxy({} as BackendState, {
+  get: (_t, prop) => Reflect.get(current(), prop),
+  set: (_t, prop, value) => Reflect.set(current(), prop, value),
+  has: (_t, prop) => Reflect.has(current(), prop),
+  deleteProperty: (_t, prop) => Reflect.deleteProperty(current(), prop),
+  ownKeys: () => Reflect.ownKeys(current()),
+  getOwnPropertyDescriptor: (_t, prop) => {
+    const d = Reflect.getOwnPropertyDescriptor(current(), prop);
+    return d ? { ...d, configurable: true } : undefined;
+  },
+});
 
 export function wabaConfigured(): boolean {
   return !!(state.WABA_ACCESS_TOKEN && state.WABA_PHONE_NUMBER_ID);

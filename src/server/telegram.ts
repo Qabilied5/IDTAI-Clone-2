@@ -6,6 +6,9 @@
 import { escCheckIncoming } from './escalation';
 import { xfetch } from './fetch';
 import { handleMessageAndMaybeSchedule, schedFreshState, schedResolveButtonId, tgOptionsToKeyboard } from './scheduling';
+import { clearIntegration, saveIntegration } from './integration-store';
+import { requireOrgId, runWithOrg } from './org-context';
+import { otherOrgHasTelegramToken } from './tenants';
 import { state } from './state';
 import type { Conversation } from './types';
 
@@ -232,20 +235,39 @@ export async function startTelegramPolling() {
 
 /* Validasi token ke Telegram lalu pasang & restart polling. */
 export async function telegramSetConfig(token: string, chatId: string) {
+  const orgId = requireOrgId();
+  if (otherOrgHasTelegramToken(orgId, token)) {
+    throw Object.assign(new Error('Bot Telegram ini sudah dipakai perusahaan lain.'), { status: 409 });
+  }
   const testRes = await xfetch(`${TG(token)}/getMe`);
   const testData = await testRes.json();
   if (!testData.ok) throw Object.assign(new Error(testData.description || 'Token tidak valid'), { status: 400 });
+
+  await saveIntegration(
+    orgId,
+    'telegram',
+    { token, chatId, botInfo: JSON.stringify(testData.result) },
+    {
+      status: 'connected',
+      accountLabel: testData.result?.username ? `@${testData.result.username}` : null,
+      lastStatus: 'Polling aktif',
+    }
+  );
 
   state.TELEGRAM_BOT_TOKEN = token;
   state.TELEGRAM_DEFAULT_CHAT_ID = chatId;
   state.tgBotInfo = testData.result;
 
   stopTelegramPolling();
-  startTelegramPolling(); // tidak di-await — loop jalan di background
+  // Loop polling jalan terus di background — harus terikat ke perusahaan ini, bukan ke request.
+  runWithOrg(orgId, () => {
+    startTelegramPolling().catch((e) => console.error('[Telegram] Polling berhenti:', (e as Error).message));
+  });
   return state.tgBotInfo;
 }
 
-export function telegramClearConfig() {
+export async function telegramClearConfig() {
+  await clearIntegration(requireOrgId(), 'telegram');
   state.TELEGRAM_BOT_TOKEN = '';
   state.TELEGRAM_DEFAULT_CHAT_ID = '';
   state.tgBotInfo = null;

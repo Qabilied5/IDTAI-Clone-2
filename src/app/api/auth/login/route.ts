@@ -56,9 +56,15 @@ export async function POST(req: Request) {
         PasswordHash: string;
         Role: UserRole;
         IsActive: boolean;
+        OrganizationId: string;
+        OrgName: string;
+        OrgActive: boolean;
       }>(
-        `SELECT TOP 1 Id, Name, Email, PasswordHash, Role, IsActive
-         FROM dbo.Users WHERE Email = @email`
+        `SELECT TOP 1 u.Id, u.Name, u.Email, u.PasswordHash, u.Role, u.IsActive,
+                u.OrganizationId, o.Name AS OrgName, o.IsActive AS OrgActive
+         FROM dbo.Users u
+         JOIN dbo.Organizations o ON o.Id = u.OrganizationId
+         WHERE u.Email = @email`
       );
 
     const row = result.recordset[0];
@@ -69,6 +75,9 @@ export async function POST(req: Request) {
     }
     if (!row.IsActive) {
       return NextResponse.json({ message: "Akun dinonaktifkan. Hubungi admin." }, { status: 403 });
+    }
+    if (!row.OrgActive) {
+      return NextResponse.json({ message: "Perusahaan dinonaktifkan. Hubungi admin." }, { status: 403 });
     }
 
     await pool
@@ -82,10 +91,12 @@ export async function POST(req: Request) {
       email: row.Email,
       role: row.Role,
       avatarInitials: initials(row.Name),
+      organizationId: row.OrganizationId,
+      organizationName: row.OrgName,
     };
 
     const maxAge = body.rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 8;
-    const token = await new SignJWT({ role: user.role, name: user.name })
+    const token = await new SignJWT({ role: user.role, name: user.name, org: user.organizationId })
       .setProtectedHeader({ alg: "HS256" })
       .setSubject(user.id)
       .setIssuedAt()

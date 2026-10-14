@@ -6,6 +6,8 @@
 import { APPT_DEFAULT_DURATION, APPT_DEFAULT_STAFF, CALENDLY_API_BASE } from './config';
 import { apptPad, apptTypeLabel } from './appointments';
 import { xfetch } from './fetch';
+import { clearIntegration, saveIntegration } from './integration-store';
+import { requireOrgId } from './org-context';
 import { calendlyConfigured, state } from './state';
 import type { AiAppointment, DateChoice, TimeSlot } from './types';
 
@@ -480,6 +482,7 @@ export async function calendlyResolveEventType(token: string, userUri: string, i
 
 /* Simpan kredensial runtime (dipanggil POST /api/calendly/config). */
 export async function calendlySetConfig(token: string, eventTypeInput: string) {
+  const orgId = requireOrgId();
   const meRes = await xfetch(`${CALENDLY_API_BASE}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
   const meData: any = await meRes.json().catch(() => ({}));
   if (!meRes.ok || !meData.resource) {
@@ -488,6 +491,28 @@ export async function calendlySetConfig(token: string, eventTypeInput: string) {
 
   const eventType = await calendlyResolveEventType(token, meData.resource.uri, eventTypeInput);
   const credentialsChanged = token !== state.CALENDLY_ACCESS_TOKEN || eventType.uri !== state.CALENDLY_EVENT_TYPE_URI;
+
+  const userInfo = {
+    uri: meData.resource.uri,
+    name: meData.resource.name,
+    email: meData.resource.email,
+    organizationUri: meData.resource.current_organization,
+  };
+  await saveIntegration(
+    orgId,
+    'calendly',
+    {
+      token,
+      eventTypeUri: eventType.uri,
+      userInfo: JSON.stringify(userInfo),
+      eventType: JSON.stringify(eventType),
+    },
+    {
+      status: 'connected',
+      accountLabel: userInfo.email ? `${userInfo.name} (${userInfo.email})` : userInfo.name,
+      lastStatus: eventType.name ? `Event type: ${eventType.name}` : 'Aktif',
+    }
+  );
 
   state.CALENDLY_ACCESS_TOKEN = token;
   state.CALENDLY_EVENT_TYPE_URI = eventType.uri;
@@ -506,7 +531,8 @@ export async function calendlySetConfig(token: string, eventTypeInput: string) {
   return { user: state.calendlyUserInfo, eventType };
 }
 
-export function calendlyClearConfig() {
+export async function calendlyClearConfig() {
+  await clearIntegration(requireOrgId(), 'calendly');
   state.CALENDLY_ACCESS_TOKEN = '';
   state.CALENDLY_EVENT_TYPE_URI = '';
   state.calendlyUserInfo = null;
