@@ -35,7 +35,11 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => set({ user: null, token: null, error: null }),
+      logout: () => {
+        // Hapus cookie sesi di server (httpOnly, tidak bisa dihapus dari JS).
+        fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+        set({ user: null, token: null, error: null });
+      },
       clearError: () => set({ error: null }),
     }),
     {

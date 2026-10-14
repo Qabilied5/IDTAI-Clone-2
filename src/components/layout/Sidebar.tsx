@@ -1,12 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 
 import { NAV_SECTIONS } from "@/lib/nav";
+import { useAuthStore } from "@/store/useAuthStore";
+
+const ROLE_LABEL: Record<string, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  agent: "Agent",
+  viewer: "Viewer",
+};
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  // Store dibaca dari localStorage di browser; tunggu mount agar tidak hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const displayName = mounted && user ? user.name : "—";
+  const displayRole = mounted && user ? ROLE_LABEL[user.role] ?? user.role : "";
+  const displayInitials = mounted && user ? user.avatarInitials : "";
+
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
+    router.refresh();
+  };
 
   return (
     <div className="flex h-full w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
@@ -59,17 +86,22 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto border-t border-neutral-100 px-2 py-3">
+        <div className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2">
+          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">
+            {displayInitials}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-ink">{displayName}</div>
+            <div className="text-[10px] text-neutral-400">{displayRole}</div>
+          </div>
+        </div>
         <button
           type="button"
-          className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left hover:bg-neutral-50"
+          onClick={handleLogout}
+          className="mt-1 flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left text-[12.5px] font-medium text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
         >
-          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">
-            BW
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-ink">Budi Wicaksono</div>
-            <div className="text-[10px] text-neutral-400">Super Admin</div>
-          </div>
+          <LogOut className="h-[17px] w-[17px]" />
+          <span>Keluar</span>
         </button>
       </div>
     </div>

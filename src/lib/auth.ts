@@ -1,20 +1,21 @@
-import { apiFetch } from "@/lib/api";
 import type { AuthResponse, LoginCredentials } from "@/types/auth";
 
 /**
- * Kirim kredensial ke endpoint login backend.
- * Endpoint ini mengarah ke server.js (Express) yang sudah menangani
- * verifikasi user & penerbitan token — lihat integrasi eskalasi/agent
- * yang sudah berjalan di backend yang sama.
+ * Kirim kredensial ke route handler Next.js (/api/auth/login),
+ * yang memverifikasi user langsung ke SQL Server.
  */
 export async function loginRequest(
   credentials: LoginCredentials
 ): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/auth/login", {
+  const res = await fetch("/api/auth/login", {
     method: "POST",
-    body: JSON.stringify({
-      email: credentials.email,
-      password: credentials.password,
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials),
   });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message ?? "Gagal masuk. Coba lagi.");
+  }
+  return data as AuthResponse;
 }

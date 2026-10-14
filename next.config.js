@@ -6,7 +6,13 @@ const nextConfig = {
   // (polling Telegram, cek stall, polling Calendly) — pengganti app.listen().
   experimental: {
     instrumentationHook: true,
-    serverComponentsExternalPackages: ["pdf-parse", "mammoth", "xlsx"],
+    serverComponentsExternalPackages: [
+      "pdf-parse",
+      "mammoth",
+      "xlsx",
+      "mssql",
+      "tedious",
+    ],
   },
 };
 
