@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Pengaturan Agent — Indotrading AI",
-};
-
-export default function PengaturanAgentPage() {
-  return <ComingSoon title="Pengaturan Agent" />;
+export default function PengaturanAgentIndex() {
+  redirect("/pengaturan-agent/persona");
 }

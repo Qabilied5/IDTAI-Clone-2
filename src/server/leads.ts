@@ -1,12 +1,9 @@
 /**
  * Helper server untuk halaman Kontak / Leads.
- *
- * ⚠ ADAPTER: 4 import di bawah saya asumsikan dari nama fungsi di server.js
- * original. Sesuaikan nama/lokasinya dengan isi server/waba.ts & server/telegram.ts
- * Anda — hanya 4 baris ini yang perlu diubah.
+ * Status channel dibaca dari state (per perusahaan); fungsi mulai-chat ada di followup.ts.
  */
-import { isWabaConfigured, wabaStartChatWithLead } from '@/server/waba';
-import { isTelegramConfigured, tgStartChatWithLead } from '@/server/telegram';
+import { tgStartChatWithLead, wabaStartChatWithLead } from '@/server/followup';
+import { telegramConfigured as isTelegramConfigured, wabaConfigured as isWabaConfigured } from '@/server/state';
 
 /* ── Proxy Google Apps Script ─────────────────────────────────── */
 const ALLOWED_HOSTS = ['script.google.com', 'script.googleusercontent.com'];

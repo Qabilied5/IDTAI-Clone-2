@@ -1,50 +1,73 @@
-import { KB_UPLOAD_ALLOWED_EXT, KB_UPLOAD_MAX_BYTES } from '@/server/config';
-import { errMsg, fail, ok } from '@/server/http';
+import fs from 'fs';
+import { fail, ok } from '@/server/http';
 import { kbExtractFileText, kbNextId, kbPublicDoc, kbStoreUploadedFile, kbTrimContent } from '@/server/knowledge-base';
 import { state } from '@/server/state';
 import { ensureDataLoaded, kbSave } from '@/server/store';
 import type { KbDoc } from '@/server/types';
 
-export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
-/* Upload file (pdf/docx/xlsx/txt/csv), multipart field "files" (maks 10) — pengganti multer. */
+const ALLOWED_EXT = ['pdf', 'docx', 'xlsx', 'xls', 'txt', 'csv'];
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+/* POST /api/knowledge-base/upload — multipart: files[] + category */
 export async function POST(req: Request) {
+  ensureDataLoaded();
+  let form: FormData;
   try {
-    ensureDataLoaded();
-    const form = await req.formData();
-    const files = form.getAll('files').filter((f): f is File => f instanceof File).slice(0, 10);
-    if (!files.length) return fail('Tidak ada file yang diunggah', 400);
-
-    const category = String(form.get('category') || '').trim() || 'umum';
-    const created: KbDoc[] = [];
-    for (const file of files) {
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      if (!KB_UPLOAD_ALLOWED_EXT.includes(ext)) return fail(`Tipe file .${ext} tidak didukung`, 400);
-      if (file.size > KB_UPLOAD_MAX_BYTES) return fail(`File ${file.name} melebihi batas 20 MB`, 400);
-
-      const stored = await kbStoreUploadedFile(file);
-      const text = await kbExtractFileText(stored.storedPath, stored.ext);
-      const doc: KbDoc = {
-        id: kbNextId(),
-        title: file.name.replace(/\.[^.]+$/, ''),
-        category,
-        status: 'aktif',
-        sourceType: 'file',
-        fileName: file.name,
-        fileExt: stored.ext,
-        storedPath: stored.storedPath,
-        sizeBytes: stored.size,
-        content: kbTrimContent(text),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      state.knowledgeBase.push(doc);
-      created.push(doc);
-    }
-    kbSave();
-    return ok({ docs: created.map(kbPublicDoc) });
-  } catch (err) {
-    return fail(errMsg(err), 400);
+    form = await req.formData();
+  } catch {
+    return fail('Form upload tidak valid', 400);
   }
+
+  const files = form.getAll('files').filter((f): f is File => typeof f !== 'string');
+  const category = String(form.get('category') ?? '').trim() || 'umum';
+  if (!files.length) return fail('Pilih minimal 1 file', 400);
+
+  const created: KbDoc[] = [];
+  const errors: string[] = [];
+
+  for (const file of files) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!ALLOWED_EXT.includes(ext)) {
+      errors.push(`${file.name}: format .${ext || '?'} tidak didukung`);
+      continue;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      errors.push(`${file.name}: ukuran melebihi 20 MB`);
+      continue;
+    }
+
+    const stored = await kbStoreUploadedFile(file);
+    let text = '';
+    try {
+      text = await kbExtractFileText(stored.storedPath, stored.ext);
+    } finally {
+      // Isi teks sudah disimpan di dokumen; file mentah tidak dipakai lagi.
+      try { fs.unlinkSync(stored.storedPath); } catch { /* abaikan */ }
+    }
+
+    const now = Date.now();
+    const doc: KbDoc = {
+      id: kbNextId(),
+      title: file.name.replace(/\.[^.]+$/, ''),
+      category,
+      status: 'aktif',
+      sourceType: 'file',
+      fileName: file.name,
+      fileExt: stored.ext,
+      sizeBytes: stored.size,
+      content: kbTrimContent(text) || '[Ekstraksi gagal: tidak ada teks yang bisa dibaca dari file ini]',
+      createdAt: now,
+      updatedAt: now,
+    };
+    state.knowledgeBase.push(doc);
+    created.push(doc);
+  }
+
+  if (!created.length) return fail(errors.join('; ') || 'Tidak ada file yang diproses', 400);
+  kbSave();
+  return ok({ docs: created.map(kbPublicDoc), errors });
 }

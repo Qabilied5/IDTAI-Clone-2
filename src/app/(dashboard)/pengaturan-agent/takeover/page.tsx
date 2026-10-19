@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { TakeoverSection } from "@/components/pengaturan-agent/TakeoverSection";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Aturan Takeover — Indotrading AI",
-};
-
-export default function PengaturanAgentTakeoverPage() {
-  return <ComingSoon title="Aturan Takeover" />;
+export default function Page() {
+  return <TakeoverSection />;
 }

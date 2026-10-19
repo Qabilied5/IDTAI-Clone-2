@@ -1,22 +1,20 @@
-import fs from 'fs';
 import { fail, ok, readJson } from '@/server/http';
 import { state } from '@/server/state';
 import { ensureDataLoaded, kbSave } from '@/server/store';
-import type { KbDoc } from '@/server/types';
 
-export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
+/* POST /api/knowledge-base/bulk-delete — body { ids: number[] } */
 export async function POST(req: Request) {
   ensureDataLoaded();
-  const { ids } = await readJson(req);
-  if (!Array.isArray(ids) || ids.length === 0) return fail('Tidak ada dokumen yang dipilih', 400);
-  const idSet = new Set(ids.map(Number));
-  const removed: KbDoc[] = [];
-  for (let i = state.knowledgeBase.length - 1; i >= 0; i--) {
-    if (idSet.has(state.knowledgeBase[i].id)) removed.push(...state.knowledgeBase.splice(i, 1));
-  }
-  removed.forEach((d) => { if (d.storedPath) fs.unlink(d.storedPath, () => {}); });
-  if (removed.length > 0) kbSave();
-  return ok({ deletedCount: removed.length, deletedIds: removed.map((d) => d.id) });
+  const b = await readJson<{ ids?: unknown }>(req);
+  const ids = new Set(Array.isArray(b.ids) ? b.ids.map(Number).filter(Number.isFinite) : []);
+  if (!ids.size) return fail('Tidak ada dokumen yang dipilih', 400);
+
+  const before = state.knowledgeBase.length;
+  state.knowledgeBase = state.knowledgeBase.filter((d) => !ids.has(d.id));
+  const deletedCount = before - state.knowledgeBase.length;
+  if (deletedCount) kbSave();
+  return ok({ deletedCount });
 }

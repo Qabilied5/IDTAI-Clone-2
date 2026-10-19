@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { AksesPeranSection } from "@/components/pengaturan-agent/AksesPeranSection";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Akses & Peran — Indotrading AI",
-};
-
-export default function PengaturanAgentAksesPeranPage() {
-  return <ComingSoon title="Akses & Peran" />;
+export default function Page() {
+  return <AksesPeranSection />;
 }

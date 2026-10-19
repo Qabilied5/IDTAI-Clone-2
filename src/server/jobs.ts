@@ -9,7 +9,7 @@ import { calendlyPollNewBookings } from './calendly';
 import { escAssignToAgent } from './escalation';
 import { runWithOrg } from './org-context';
 import { allOrgIds, calendlyConfigured, state, telegramConfigured } from './state';
-import { ensureDataLoaded } from './store';
+import { apptSave, ensureDataLoaded } from './store';
 import { sendViaTelegramSafe, startTelegramPolling } from './telegram';
 import { sendViaWaba } from './waba';
 
@@ -64,5 +64,8 @@ export function startBackgroundJobs() {
   });
 
   setInterval(() => forEachOrg('Eskalasi', escCheckStalledConversations), 60 * 1000);
+  // Jaring pengaman: appointment yang diubah di tempat yang tidak memanggil apptSave() tetap tersimpan.
+  // Hanya baris yang berubah yang ditulis (dibandingkan lewat hash), jadi murah.
+  setInterval(() => forEachOrg('Simpan', apptSave), 15 * 1000);
   setInterval(() => forEachOrg('Calendly', () => (calendlyConfigured() ? calendlyPollNewBookings() : undefined)), 2 * 60 * 1000);
 }

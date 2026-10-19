@@ -6,6 +6,7 @@ import {
   IconKnowledgeBase,
   IconLeads,
   IconOverview,
+  IconPengaturan,
   IconPengaturanAgent,
   IconPercakapan,
   IconPipeline,
@@ -38,6 +39,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Integrasi", href: "/integrasi", icon: IconIntegrasi },
       { label: "Pengaturan Agent", href: "/pengaturan-agent", icon: IconPengaturanAgent },
       { label: "Knowledge Base", href: "/knowledge-base", icon: IconKnowledgeBase },
+      { label: "Pengaturan", href: "/pengaturan", icon: IconPengaturan },
     ],
   },
 ];

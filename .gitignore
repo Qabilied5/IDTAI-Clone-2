@@ -12,5 +12,8 @@ npm-debug.log*
 *.tsbuildinfo
 integrasi-calendly.zip
 
+# ALL FILE ZIP
 env-keys.txt
 login-files.zip
+knowledge-base-files.zip
+sidebar-files.zip

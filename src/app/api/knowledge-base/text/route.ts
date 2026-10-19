@@ -1,25 +1,34 @@
+import { KB_MAX_CONTENT_CHARS } from '@/server/config';
 import { fail, ok, readJson } from '@/server/http';
-import { kbNextId, kbPublicDoc, kbTrimContent } from '@/server/knowledge-base';
+import { kbNextId, kbPublicDoc } from '@/server/knowledge-base';
 import { state } from '@/server/state';
-import { kbSave } from '@/server/store';
+import { ensureDataLoaded, kbSave } from '@/server/store';
 import type { KbDoc } from '@/server/types';
 
-export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
+/* POST /api/knowledge-base/text — body { title, content, category } */
 export async function POST(req: Request) {
-  const { title, content, category } = await readJson(req);
-  if (!title || !String(title).trim()) return fail('Judul dokumen wajib diisi', 400);
-  if (!content || !String(content).trim()) return fail('Konten dokumen wajib diisi', 400);
+  ensureDataLoaded();
+  const b = await readJson<{ title?: string; content?: string; category?: string }>(req);
+  const title = String(b.title ?? '').trim();
+  const content = String(b.content ?? '').trim();
+  if (!title || !content) return fail('Judul & konten wajib diisi', 400);
+  if (content.length > KB_MAX_CONTENT_CHARS) {
+    return fail(`Konten terlalu panjang (maks ${KB_MAX_CONTENT_CHARS.toLocaleString('id-ID')} karakter)`, 400);
+  }
+
+  const now = Date.now();
   const doc: KbDoc = {
     id: kbNextId(),
-    title: String(title).trim(),
-    category: String(category || '').trim() || 'umum',
+    title,
+    category: String(b.category ?? '').trim() || 'umum',
     status: 'aktif',
     sourceType: 'teks',
-    content: kbTrimContent(content),
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    content,
+    createdAt: now,
+    updatedAt: now,
   };
   state.knowledgeBase.push(doc);
   kbSave();

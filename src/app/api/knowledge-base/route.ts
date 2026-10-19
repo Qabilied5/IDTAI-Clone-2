@@ -1,8 +1,15 @@
-/* Knowledge Base index — belum diport dari server.js. Stub supaya route valid. */
-import { fail } from '@/server/http';
+import { ok } from '@/server/http';
+import { kbPublicDoc } from '@/server/knowledge-base';
+import { state } from '@/server/state';
+import { ensureDataLoaded } from '@/server/store';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
+/* GET /api/knowledge-base — daftar dokumen milik perusahaan yang sedang login
+   (state di-resolve per perusahaan lewat konteks tenant). Isi lengkap tiap dokumen
+   diambil terpisah lewat GET /api/knowledge-base/:id. */
 export async function GET() {
-  return fail('Endpoint /api/knowledge-base belum diimplementasikan', 501);
+  ensureDataLoaded();
+  return ok({ docs: state.knowledgeBase.map(kbPublicDoc) });
 }

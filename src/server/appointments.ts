@@ -7,6 +7,7 @@ import {
   APPT_DEFAULT_DURATION, APPT_DEFAULT_STAFF, APPT_TIME_SLOTS, APPT_TYPE_LABELS, APPT_WORKING_DAYS,
 } from './config';
 import { state } from './state';
+import { apptSave } from './store';
 import type { AiAppointment, Conversation, DateChoice, TimeSlot } from './types';
 
 export function apptPad(n: number): string { return String(n).padStart(2, '0'); }
@@ -103,6 +104,7 @@ export function apptCreateFromChat(conv: Conversation, slot: TimeSlot, meetingTy
     ],
   };
   state.aiAppointments.push(record);
+  apptSave();
   return record;
 }
 
@@ -111,5 +113,6 @@ export function apptConfirm(id: string): AiAppointment | null {
   if (!record) return null;
   record.status = 'terkonfirmasi';
   record.timeline.push({ type: 'success', event: 'Admin mengonfirmasi appointment', sub: 'Dikonfirmasi lewat halaman Appointment', time: 'Baru saja' });
+  apptSave();
   return record;
 }

@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { PersonaSection } from "@/components/pengaturan-agent/PersonaSection";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Persona Agent — Indotrading AI",
-};
-
-export default function PengaturanAgentPersonaPage() {
-  return <ComingSoon title="Persona Agent" />;
+export default function Page() {
+  return <PersonaSection />;
 }

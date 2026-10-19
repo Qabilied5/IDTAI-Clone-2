@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
-
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Knowledge Base — Indotrading AI",
-};
+import { KnowledgeBaseContent } from "@/components/knowledge-base/KnowledgeBaseContent";
 
 export default function KnowledgeBasePage() {
-  return <ComingSoon title="Knowledge Base" />;
+  return <KnowledgeBaseContent />;
 }

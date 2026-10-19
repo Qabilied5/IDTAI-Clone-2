@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { LogAuditSection } from "@/components/pengaturan-agent/LogAuditSection";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Log Audit — Indotrading AI",
-};
-
-export default function PengaturanAgentLogAuditPage() {
-  return <ComingSoon title="Log Audit" />;
+export default function Page() {
+  return <LogAuditSection />;
 }

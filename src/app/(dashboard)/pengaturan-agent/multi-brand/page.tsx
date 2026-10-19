@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { MultiBrandSection } from "@/components/pengaturan-agent/MultiBrandSection";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Multi Brand — Indotrading AI",
-};
-
-export default function PengaturanAgentMultiBrandPage() {
-  return <ComingSoon title="Multi Brand" />;
+export default function Page() {
+  return <MultiBrandSection />;
 }

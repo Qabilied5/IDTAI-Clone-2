@@ -9,6 +9,7 @@ import { xfetch } from './fetch';
 import { clearIntegration, saveIntegration } from './integration-store';
 import { requireOrgId } from './org-context';
 import { calendlyConfigured, state } from './state';
+import { apptSave } from './store';
 import type { AiAppointment, DateChoice, TimeSlot } from './types';
 
 /* Error API Calendly + status HTTP-nya — dipakai alur booking otomatis untuk
@@ -272,6 +273,7 @@ export function apptCreateFromAutoBooking(input: AutoBookingRecordInput): AiAppo
     ],
   };
   state.aiAppointments.push(record);
+  apptSave();
   return record;
 }
 
@@ -363,6 +365,7 @@ export function apptCreateFromCalendlyBooking(payload: any, eventInfo: any): AiA
     ],
   };
   state.aiAppointments.push(record);
+  apptSave();
   return record;
 }
 

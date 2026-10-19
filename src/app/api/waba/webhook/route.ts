@@ -1,29 +1,31 @@
 import { NextResponse } from 'next/server';
 
-import { state } from '@/server/state';
-import { ensureDataLoaded } from '@/server/store';
+import { findOrgByWabaVerifyToken } from '@/server/tenants';
 import { wabaHandleWebhookBody } from '@/server/waba';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-/* GET /api/waba/webhook — verifikasi webhook dari Meta App Dashboard */
+/* GET /api/waba/webhook — verifikasi webhook dari Meta App Dashboard.
+   Multi-perusahaan: verify token boleh cocok dengan perusahaan MANA PUN. */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge') || '';
 
-  console.log(`[WABA] Webhook verify — mode: ${mode}, token diterima: "${token}", token di server: "${state.WABA_VERIFY_TOKEN}"`);
+  const owner = mode === 'subscribe' && token ? findOrgByWabaVerifyToken(token) : null;
+  console.log(`[WABA] Webhook verify — mode: ${mode}, token ${owner ? 'cocok' : 'TIDAK cocok'}`);
 
-  if (mode === 'subscribe' && token && token === state.WABA_VERIFY_TOKEN) {
+  if (owner) {
     return new NextResponse(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } });
   }
   return new NextResponse(null, { status: 403 });
 }
 
 /* POST /api/waba/webhook — pesan masuk dari Meta. Balas 200 secepatnya,
-   proses (termasuk panggilan Ollama) jalan di background. */
+   proses (termasuk panggilan Ollama) jalan di background.
+   Perusahaan pemilik pesan ditentukan di wabaHandleWebhookBody lewat phone_number_id. */
 export async function POST(req: Request) {
   let body: any = null;
   try {
@@ -32,7 +34,6 @@ export async function POST(req: Request) {
     return new NextResponse(null, { status: 200 });
   }
 
-  ensureDataLoaded();
   setImmediate(() => {
     try {
       wabaHandleWebhookBody(body);

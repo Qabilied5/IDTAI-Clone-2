@@ -13,6 +13,7 @@ import { clearIntegration, saveIntegration } from './integration-store';
 import { currentOrgIdOrNull, requireOrgId, runWithOrg } from './org-context';
 import { findOrgByWabaPhoneNumberId, otherOrgHasWabaPhone } from './tenants';
 import { state, wabaConfigured } from './state';
+import { ensureDataLoaded } from './store';
 import type { Conversation, SchedOption } from './types';
 
 function assertConfigured() {
@@ -247,8 +248,12 @@ export function wabaHandleWebhookBody(body: any) {
           console.warn(`[WABA] Webhook untuk Phone Number ID ${phoneId} tidak cocok dengan perusahaan mana pun — diabaikan`);
           continue;
         }
-        if (orgId) runWithOrg(orgId, () => wabaHandleChangeValue(value));
-        else wabaHandleChangeValue(value);
+        const handle = () => {
+          ensureDataLoaded();
+          wabaHandleChangeValue(value);
+        };
+        if (orgId) runWithOrg(orgId, handle);
+        else handle();
       }
     }
   } catch (err) {

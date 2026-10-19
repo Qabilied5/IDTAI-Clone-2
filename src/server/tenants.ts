@@ -32,3 +32,18 @@ export function otherOrgHasTelegramToken(orgId: string, token: string): boolean 
   }
   return false;
 }
+
+/** Webhook Calendly: cocokkan event type / user pada payload dengan konfigurasi tiap perusahaan. */
+export function findOrgByCalendlyEvent(eventTypeUri?: string, userUris: string[] = []): string | null {
+  const states = allStates();
+  if (eventTypeUri) {
+    for (const [orgId, s] of states) {
+      if (s.CALENDLY_EVENT_TYPE_URI && s.CALENDLY_EVENT_TYPE_URI === eventTypeUri) return orgId;
+    }
+  }
+  for (const [orgId, s] of states) {
+    const uri = s.calendlyUserInfo && s.calendlyUserInfo.uri;
+    if (uri && userUris.includes(uri)) return orgId;
+  }
+  return null;
+}

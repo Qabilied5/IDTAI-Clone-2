@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
+import { KbDetail } from "@/components/knowledge-base/KbDetail";
 
-import { ComingSoon } from "@/components/shared/ComingSoon";
-
-export const metadata: Metadata = {
-  title: "Detail Dokumen — Indotrading AI",
-};
-
-export default function KnowledgeBaseDocumentidPage() {
-  return <ComingSoon title="Detail Dokumen" />;
+export default function KnowledgeBaseDocumentPage({ params }: { params: { documentId: string } }) {
+  return <KbDetail documentId={params.documentId} />;
 }

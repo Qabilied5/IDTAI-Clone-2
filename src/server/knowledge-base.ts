@@ -12,6 +12,7 @@ import {
   KB_FILTER_MODEL, KB_FILTER_TIMEOUT_MS, KB_MAX_CONTENT_CHARS, KB_UPLOADS_DIR, OLLAMA_BASE_URL,
 } from './config';
 import { xfetch } from './fetch';
+import { orgIdOrDefault } from './org-context';
 import { ollamaGenerateJson, ollamaReachableCached } from './ollama';
 import { state } from './state';
 import { ensureDataLoaded, kbSave } from './store';
@@ -115,8 +116,10 @@ export async function kbExtractFileText(filePath: string, ext: string): Promise<
 /* Simpan file upload (dari req.formData()) ke data/kb-uploads/ — pengganti multer. */
 export async function kbStoreUploadedFile(file: File): Promise<{ storedPath: string; ext: string; size: number }> {
   const ext = path.extname(file.name).slice(1).toLowerCase();
-  fs.mkdirSync(KB_UPLOADS_DIR, { recursive: true });
-  const storedPath = path.join(KB_UPLOADS_DIR, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.name)}`);
+  // Multi-perusahaan: tiap perusahaan punya subfolder upload sendiri.
+  const uploadDir = path.join(KB_UPLOADS_DIR, orgIdOrDefault());
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const storedPath = path.join(uploadDir, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.name)}`);
   const buffer = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(storedPath, new Uint8Array(buffer));
   return { storedPath, ext, size: buffer.length };

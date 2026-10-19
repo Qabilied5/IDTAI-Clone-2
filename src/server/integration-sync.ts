@@ -1,6 +1,7 @@
 import { getIntegration, listOrganizations } from "@/server/integration-store";
-import { setDefaultOrgId } from "@/server/org-context";
+import { runWithOrg, setDefaultOrgId } from "@/server/org-context";
 import { getStateFor } from "@/server/state";
+import { loadOrgDataIntoState } from "@/server/store";
 
 function parseJson<T>(raw: string | undefined): T | null {
   if (!raw) return null;
@@ -15,7 +16,8 @@ function parseJson<T>(raw: string | undefined): T | null {
  * Dipanggil dari instrumentation.ts saat server boot, SEBELUM startBackgroundJobs:
  *  1. menentukan perusahaan default (slug "indotrading", atau yang pertama) — hanya perusahaan
  *     ini yang memakai nilai .env sebagai fallback;
- *  2. membuat state tiap perusahaan aktif dan mengisinya dari SQL Server.
+ *  2. membuat state tiap perusahaan aktif dan mengisinya dari SQL Server
+ *     (kredensial channel + data bisnis).
  * Jika DB kosong/gagal, nilai .env tetap dipakai oleh perusahaan default.
  */
 export async function loadIntegrationsIntoState(): Promise<void> {
@@ -56,5 +58,8 @@ export async function loadIntegrationsIntoState(): Promise<void> {
       st.calendlyEventType = parseJson(cal.settings.eventType);
       console.log(`[Integrasi] ${org.name}: Calendly dimuat dari database`);
     }
+
+    // Data bisnis (KB, agent, eskalasi, identitas, pipeline) dari SQL Server.
+    await runWithOrg(org.id, () => loadOrgDataIntoState());
   }
 }
