@@ -359,23 +359,31 @@ export function saveEscalation(orgId: string, settings: unknown) {
 }
 
 /* ── identitas agent (1 baris/perusahaan) ────────────────────── */
-export async function loadIdentity(orgId: string): Promise<{ botName?: string; companyName?: string; extra: Record<string, unknown> } | null> {
+export async function loadIdentity(
+  orgId: string
+): Promise<{ botName?: string; companyName?: string; companyDesc?: string; extra: Record<string, unknown> } | null> {
   const pool = await getPool();
   const res = await pool
     .request()
     .input('org', sql.UniqueIdentifier, orgId)
-    .query('SELECT BotName, CompanyName, Extra FROM dbo.AgentIdentity WHERE OrganizationId = @org');
+    .query('SELECT BotName, CompanyName, CompanyDesc, Extra FROM dbo.AgentIdentity WHERE OrganizationId = @org');
   const row = res.recordset[0];
   if (!row) return null;
   return {
     botName: row.BotName ?? undefined,
     companyName: row.CompanyName ?? undefined,
+    // NULL = belum pernah diisi (nilai awal dari .env tetap dipakai); '' = sengaja dikosongkan.
+    companyDesc: row.CompanyDesc ?? undefined,
     extra: fromJson<Record<string, unknown>>(row.Extra, {}),
   };
 }
 
-export function saveIdentity(orgId: string, intro: { botName: string; companyName: string } & Record<string, unknown>) {
-  const { botName, companyName, ...rest } = intro;
+export function saveIdentity(
+  orgId: string,
+  intro: { botName: string; companyName: string; companyDesc?: string }
+) {
+  // Field persona lain (tone, sop, tagline, ...) yang ikut ada di objek disimpan di kolom Extra (JSON).
+  const { botName, companyName, companyDesc, ...rest } = intro;
   const extra = Object.keys(rest).length ? JSON.stringify(rest) : null;
   enqueue(`${orgId}:AgentIdentity`, async () => {
     const pool = await getPool();
@@ -384,12 +392,13 @@ export function saveIdentity(orgId: string, intro: { botName: string; companyNam
       .input('org', sql.UniqueIdentifier, orgId)
       .input('bot', nv(100), clip(botName, 100))
       .input('comp', nv(150), clip(companyName, 150))
+      .input('desc', MAX, companyDesc ?? null)
       .input('extra', MAX, extra)
       .query(
         `MERGE dbo.AgentIdentity AS t USING (SELECT @org AS OrganizationId) AS s
            ON t.OrganizationId = s.OrganizationId
-         WHEN MATCHED THEN UPDATE SET BotName = @bot, CompanyName = @comp, Extra = @extra, UpdatedAt = SYSUTCDATETIME()
-         WHEN NOT MATCHED THEN INSERT (OrganizationId, BotName, CompanyName, Extra) VALUES (@org, @bot, @comp, @extra);`
+         WHEN MATCHED THEN UPDATE SET BotName = @bot, CompanyName = @comp, CompanyDesc = @desc, Extra = @extra, UpdatedAt = SYSUTCDATETIME()
+         WHEN NOT MATCHED THEN INSERT (OrganizationId, BotName, CompanyName, CompanyDesc, Extra) VALUES (@org, @bot, @comp, @desc, @extra);`
       );
   });
 }

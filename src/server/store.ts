@@ -87,8 +87,13 @@ function applyEscalation(v: any) {
 }
 
 function applyIdentity(v: any) {
-  if (v.botName) state.companyIntro.botName = v.botName;
-  if (v.companyName) state.companyIntro.companyName = v.companyName;
+  const ci = state.companyIntro;
+  if (v.botName) ci.botName = v.botName;
+  if (v.companyName) ci.companyName = v.companyName;
+  if (typeof v.companyDesc === 'string') ci.companyDesc = v.companyDesc;
+  for (const k of ['roleTitle', 'tagline', 'sop'] as const) if (typeof v[k] === 'string') ci[k] = v[k];
+  if (['formal', 'santai', 'industri', 'custom'].includes(v.tone)) ci.tone = v.tone;
+  for (const k of ['langId', 'langAuto', 'greetName'] as const) if (typeof v[k] === 'boolean') ci[k] = v[k];
 }
 
 function applyLegacy(key: Key, v: any) {
@@ -166,7 +171,14 @@ export async function loadOrgDataIntoState(): Promise<void> {
     if (kb.length) state.knowledgeBase = kb;
     if (appts.length) state.aiAppointments = appts;
     if (esc) applyEscalation(esc);
-    if (identity) applyIdentity(identity);
+    if (identity) {
+      applyIdentity({
+        ...identity.extra,
+        botName: identity.botName,
+        companyName: identity.companyName,
+        companyDesc: identity.companyDesc,
+      });
+    }
 
     // Impor file JSON lama — hanya sekali, dan hanya untuk koleksi yang masih kosong di database.
     if (!migrated) {

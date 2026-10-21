@@ -15,6 +15,13 @@ const ROLE_LABEL: Record<string, string> = {
   viewer: "Viewer",
 };
 
+/** Inisial logo dari nama perusahaan: 2 kata -> huruf pertama tiap kata; 1 kata -> 2 huruf pertama. */
+function brandInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const raw = words.length >= 2 ? words[0][0] + words[1][0] : name.trim().slice(0, 2);
+  return raw.toUpperCase();
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -29,6 +36,11 @@ export function Sidebar() {
   const displayRole = mounted && user ? ROLE_LABEL[user.role] ?? user.role : "";
   const displayInitials = mounted && user ? user.avatarInitials : "";
 
+  // Brand di kiri atas = perusahaan yang sedang login (dari token sesi), bukan nama tertulis di kode.
+  const orgName = mounted ? user?.organizationName?.trim() : undefined;
+  const brandName = orgName || "AI Agent";
+  const brandInitial = orgName ? brandInitials(orgName) : "AI";
+
   const handleLogout = () => {
     logout();
     router.replace("/login");
@@ -38,11 +50,11 @@ export function Sidebar() {
   return (
     <div className="flex h-full w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
       <div className="flex items-center gap-2.5 border-b border-neutral-100 px-5 pb-4 pt-[18px]">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white">
-          IT
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white">
+          {brandInitial}
         </div>
-        <div>
-          <div className="text-sm font-semibold text-ink">Indotrading AI</div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-ink" title={brandName}>{brandName}</div>
           <div className="text-[10px] font-normal tracking-wide text-neutral-400">
             Admin Dashboard
           </div>

@@ -15,6 +15,7 @@ const TONES: { id: ToneId; name: string; desc: string; icon: typeof Briefcase }[
 ];
 
 const SOP_MAX = 1000;
+const COMPANY_DESC_MAX = 4000;
 
 export function PersonaSection() {
   const { form, setForm, setEscalation, companyName } = usePengaturanAgent();
@@ -43,7 +44,7 @@ export function PersonaSection() {
                 id="pa-agent-name"
                 type="text"
                 value={form.agentName}
-                placeholder="Mis. IDT AI, Sari, Andi..."
+                placeholder="Mis. Sari, Andi, Asisten Toko..."
                 onChange={(e) => setForm({ agentName: e.target.value })}
               />
             </div>
@@ -72,6 +73,25 @@ export function PersonaSection() {
             placeholder="Satu kalimat yang merepresentasikan agent..."
             onChange={(e) => setForm({ tagline: e.target.value })}
           />
+        </div>
+        <div className="pa-field">
+          <label className="pa-label" htmlFor="pa-company-desc">
+            Deskripsi Bisnis <span className="pa-label-hint">(dibaca AI)</span>
+          </label>
+          <textarea
+            id="pa-company-desc"
+            className="pa-textarea"
+            style={{ minHeight: 96 }}
+            value={form.companyDesc}
+            maxLength={COMPANY_DESC_MAX}
+            placeholder={"Jelaskan bisnis Anda secara singkat dan faktual: bidang usaha, apa yang dijual/ditawarkan, dan apa yang TIDAK dilakukan.\nCth: PT Maju Jaya adalah distributor suku cadang mesin industri di Jawa Timur. Kami tidak menjual retail."}
+            onChange={(e) => setForm({ companyDesc: e.target.value })}
+          />
+          <div className="pa-char-row"><span>{form.companyDesc.length}/{COMPANY_DESC_MAX}</span></div>
+          <div className="pa-helper">
+            AI memakai teks ini sebagai gambaran bisnis di semua balasan dan follow-up. Jika kosong, AI diminta
+            tidak mengarang bidang usaha, produk, atau harga.
+          </div>
         </div>
       </PaCard>
 

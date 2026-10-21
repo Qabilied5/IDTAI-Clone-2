@@ -74,10 +74,34 @@ export function picDelete(id: number): boolean {
   return true;
 }
 
-export function agentSetIdentity({ botName, companyName }: { botName?: string; companyName?: string }) {
+export interface IdentityInput {
+  botName?: string;
+  companyName?: string;
+  companyDesc?: string;
+  tone?: 'formal' | 'santai' | 'industri' | 'custom';
+  roleTitle?: string;
+  tagline?: string;
+  sop?: string;
+  langId?: boolean;
+  langAuto?: boolean;
+  greetName?: boolean;
+}
+
+/* Identitas & persona agent milik perusahaan yang sedang aktif (tersimpan di dbo.AgentIdentity).
+   botName/companyName tidak boleh dikosongkan; field teks lain boleh dikosongkan (= menghapus). */
+export function agentSetIdentity(input: IdentityInput) {
   ensureDataLoaded();
-  if (typeof botName === 'string' && botName.trim()) state.companyIntro.botName = botName.trim();
-  if (typeof companyName === 'string' && companyName.trim()) state.companyIntro.companyName = companyName.trim();
+  const ci = state.companyIntro;
+  if (typeof input.botName === 'string' && input.botName.trim()) ci.botName = input.botName.trim();
+  if (typeof input.companyName === 'string' && input.companyName.trim()) ci.companyName = input.companyName.trim();
+  if (typeof input.companyDesc === 'string') ci.companyDesc = input.companyDesc.trim();
+  if (typeof input.roleTitle === 'string') ci.roleTitle = input.roleTitle.trim();
+  if (typeof input.tagline === 'string') ci.tagline = input.tagline.trim();
+  if (typeof input.sop === 'string') ci.sop = input.sop.trim();
+  if (input.tone) ci.tone = input.tone;
+  if (typeof input.langId === 'boolean') ci.langId = input.langId;
+  if (typeof input.langAuto === 'boolean') ci.langAuto = input.langAuto;
+  if (typeof input.greetName === 'boolean') ci.greetName = input.greetName;
   agentIdentitySave();
-  return { ...state.companyIntro };
+  return { ...ci };
 }

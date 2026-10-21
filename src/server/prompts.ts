@@ -3,7 +3,6 @@
    Semua prompt Ollama — dipertahankan PERSIS dari server.js supaya
    perilaku AI tidak bergeser setelah migrasi.
    ============================================================= */
-import { COMPANY_DESC } from './config';
 import { kbActiveContext } from './knowledge-base';
 import { state } from './state';
 import type { Conversation, Lead } from './types';
@@ -13,6 +12,35 @@ const SUMBER_LABEL: Record<string, string> = {
   msg: 'mengirim pesan ke bisnis',
   profil: 'mengunjungi halaman profil/website',
 };
+
+/* ── Identitas bisnis: SEMUA dari state perusahaan yang sedang aktif (tersimpan di dbo.AgentIdentity),
+      tidak ada lagi nama perusahaan yang ditulis di kode. ───────────────────────────────────────── */
+
+/** Deskripsi bisnis untuk prompt. Jika belum diisi, AI diminta TIDAK mengarang bidang usaha. */
+function bizDesc(): string {
+  const d = (state.companyIntro.companyDesc || '').trim();
+  return d || `${state.companyIntro.companyName} (deskripsi bisnis belum diisi — jangan mengarang bidang usaha, produk, layanan, atau harga)`;
+}
+
+const TONE_TEXT: Record<string, string> = {
+  formal: 'formal, sopan, dan profesional',
+  santai: 'ramah, hangat, dan santai (tidak kaku)',
+  industri: 'teknikal, lugas, dan to the point (gunakan istilah industri yang tepat)',
+  custom: 'ramah dan semi-formal',
+};
+/** Gaya bahasa dari Pengaturan Agent > Persona. Belum diatur = 'ramah dan semi-formal' (perilaku lama). */
+function toneText(): string {
+  const t = state.companyIntro.tone;
+  return (t && TONE_TEXT[t]) || 'ramah dan semi-formal';
+}
+
+/** Instruksi SOP khusus dari pemilik bisnis; string kosong bila belum diisi. */
+function sopBlock(): string {
+  const sop = (state.companyIntro.sop || '').trim();
+  return sop
+    ? `Instruksi khusus dari pemilik bisnis (wajib diikuti selama tidak bertentangan dengan Knowledge Base):\n${sop}\n\n`
+    : '';
+}
 
 function sumberLabel(lead: Lead): string {
   return SUMBER_LABEL[lead.sumber || ''] || 'berinteraksi dengan bisnis kita';
@@ -30,11 +58,11 @@ function historyText(conv: Conversation): string {
 export function buildFollowupPrompt(lead: Lead): string {
   return `Kamu adalah asisten sales yang ramah dan profesional untuk bisnis B2B Indonesia.
 Tugasmu: tulis SATU pesan follow-up WhatsApp singkat (maksimal 4 kalimat) dalam Bahasa Indonesia
-untuk lead berikut. Gaya bahasa ramah dan semi-formal, tidak kaku, tidak terlalu menjual,
+untuk lead berikut. Gaya bahasa ${toneText()}, tidak kaku, tidak terlalu menjual,
 fokus membuka percakapan kembali.
 
 Tentang bisnis kami (jangan mengarang produk/layanan di luar ini):
-${COMPANY_DESC}
+${bizDesc()}
 
 Data lead:
 - Nama: ${lead.nama}
@@ -44,7 +72,7 @@ Data lead:
 - Skor AI: ${lead.aiScore || 'WARM'}
 - Status saat ini: ${lead.status || 'belum dihubungi'}
 
-Aturan:
+${sopBlock()}Aturan:
 - Sapa pakai nama lead.
 - Sebutkan aktivitas terakhirnya secara natural (jangan kaku seperti membaca data).
 - Tutup dengan pertanyaan terbuka yang mengundang balasan.
@@ -66,26 +94,26 @@ ${kbContext}
 ---`
     : `Belum ada dokumen di Knowledge Base. Gunakan hanya deskripsi umum bisnis berikut,
 jangan mengarang detail produk/harga/promo yang tidak disebutkan di sini:
-${COMPANY_DESC}`;
+${bizDesc()}`;
 
   return `Kamu adalah asisten sales AI bernama ${state.companyIntro.botName} dari ${state.companyIntro.companyName}, ramah dan profesional untuk bisnis B2B Indonesia.
 Kamu sedang membalas chat Telegram dari customer secara real-time.
 
 Tentang bisnis kami secara umum:
-${COMPANY_DESC}
+${bizDesc()}
 
 ${knowledgeBlock}
 
 ${history ? `Riwayat percakapan terakhir:\n${history}\n\n` : ''}Pesan baru dari customer: "${incomingText}"
 
-Aturan:
-- Balas pesan tersebut secara natural, singkat (maksimal 3 kalimat), Bahasa Indonesia, ramah dan semi-formal.
+${sopBlock()}Aturan:
+- Balas pesan tersebut secara natural, singkat (maksimal 3 kalimat), Bahasa Indonesia, ${toneText()}.
 - Jangan mengulang-ulang sapaan jika percakapan sudah berjalan.
 - Kalau customer menanyakan detail spesifik (produk, harga, promo, SOP, FAQ) yang TIDAK ada
   di Knowledge Base di atas, JANGAN mengarang jawaban — katakan dengan jujur bahwa informasi
   itu belum tersedia dan akan ditindaklanjuti oleh tim, jangan berpura-pura tahu.
 - Kalau customer menanyakan hal di luar cakupan bisnis kami, jujur katakan itu bukan
-  lingkup Indotrading.
+  lingkup ${state.companyIntro.companyName}.
 - JANGAN gunakan markdown, JANGAN beri judul atau penjelasan tambahan.
 - Jika belum mengetahui bisnis customer, maka tanya mereka menjual apa.
 - Output HANYA isi balasannya saja, siap kirim.`;
@@ -120,7 +148,7 @@ export function buildWabaIntroVariablePrompt(lead: Lead): string {
   return `Kamu adalah asisten sales yang ramah untuk bisnis B2B Indonesia.
 
 Tentang bisnis kami (jangan mengarang produk/layanan di luar ini):
-${COMPANY_DESC}
+${bizDesc()}
 
 Tugasmu: tulis SATU frasa pendek (maksimal 8 kata, tanpa tanda baca akhir) yang akan
 disisipkan ke dalam kalimat template WhatsApp berikut, menggantikan [FRASA]:
@@ -147,7 +175,7 @@ menindaklanjuti appointment yang baru saja dibuat oleh tim sales. Tujuannya memb
 percakapan, mengonfirmasi jadwal, dan membuat customer merasa diperhatikan.
 
 Tentang bisnis kami (jangan mengarang produk/layanan di luar ini):
-${COMPANY_DESC}
+${bizDesc()}
 
 Data appointment:
 - Nama customer: ${appointment.nama}
@@ -160,7 +188,7 @@ Data appointment:
 - Kota: ${lead.kota || '-'}
 - Status lead sebelumnya: ${lead.status || '-'}` : ''}
 
-Aturan:
+${sopBlock()}Aturan:
 - Sapa pakai nama customer.
 - Sebutkan jadwal (tanggal & waktu) secara natural.
 - Tutup dengan kalimat ramah yang mengundang balasan (mis. menanyakan kesiapan/pertanyaan).

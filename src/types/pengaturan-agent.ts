@@ -66,6 +66,8 @@ export interface PaForm {
   agentName: string;
   roleTitle: string;
   tagline: string;
+  /** Deskripsi bisnis yang dibaca AI (disimpan di dbo.AgentIdentity.CompanyDesc). */
+  companyDesc: string;
   tone: ToneId;
   langId: boolean;
   langAuto: boolean;
@@ -113,6 +115,7 @@ export const DEFAULT_FORM: PaForm = {
   agentName: "",
   roleTitle: "Sales Assistant",
   tagline: "Siap membantu kebutuhan bisnis Anda 24/7",
+  companyDesc: "",
   tone: "santai",
   langId: true,
   langAuto: false,

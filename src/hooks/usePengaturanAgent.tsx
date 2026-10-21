@@ -19,6 +19,7 @@ import {
   type EscalationForm,
   type PaForm,
   type PicAgent,
+  type ToneId,
 } from "@/types/pengaturan-agent";
 
 type ToastType = "" | "success" | "error";
@@ -69,7 +70,21 @@ export function usePengaturanAgent(): Ctx {
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-interface IdentityRes { identity?: { botName?: string; companyName?: string } }
+interface IdentityRes {
+  identity?: {
+    botName?: string;
+    companyName?: string;
+    companyDesc?: string;
+    tone?: string;
+    roleTitle?: string;
+    tagline?: string;
+    sop?: string;
+    langId?: boolean;
+    langAuto?: boolean;
+    greetName?: boolean;
+  };
+}
+const TONES: ToneId[] = ["formal", "santai", "industri", "custom"];
 interface EscalationRes {
   settings?: Partial<Omit<EscalationForm, "triggers">> & { triggers?: Partial<EscalationForm["triggers"]> };
 }
@@ -121,6 +136,15 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
         const identity = idRes.value.identity;
         if (identity?.botName) next.agentName = identity.botName;
         company = identity?.companyName ?? "";
+        // Persona yang tersimpan di database (nilai yang belum pernah diisi memakai bawaan form).
+        next.companyDesc = identity?.companyDesc ?? "";
+        if (identity?.tone && TONES.includes(identity.tone as ToneId)) next.tone = identity.tone as ToneId;
+        if (typeof identity?.roleTitle === "string" && identity.roleTitle) next.roleTitle = identity.roleTitle;
+        if (typeof identity?.tagline === "string" && identity.tagline) next.tagline = identity.tagline;
+        if (typeof identity?.sop === "string") next.sop = identity.sop;
+        if (typeof identity?.langId === "boolean") next.langId = identity.langId;
+        if (typeof identity?.langAuto === "boolean") next.langAuto = identity.langAuto;
+        if (typeof identity?.greetName === "boolean") next.greetName = identity.greetName;
       }
 
       if (escRes.status === "fulfilled") {
@@ -173,7 +197,18 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
       await Promise.all([
         apiFetch("/agent/identity", {
           method: "POST",
-          body: JSON.stringify({ botName, companyName: active?.name ?? "" }),
+          body: JSON.stringify({
+            botName,
+            companyName: active?.name ?? "",
+            companyDesc: form.companyDesc,
+            tone: form.tone,
+            roleTitle: form.roleTitle,
+            tagline: form.tagline,
+            sop: form.sop,
+            langId: form.langId,
+            langAuto: form.langAuto,
+            greetName: form.greetName,
+          }),
         }),
         apiFetch("/escalation-settings", {
           method: "POST",

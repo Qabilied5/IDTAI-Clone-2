@@ -27,7 +27,7 @@ export async function loadIntegrationsIntoState(): Promise<void> {
 
   for (const org of orgs) {
     const st = getStateFor(org.id);
-    if (org.id !== def?.id) st.companyIntro.companyName = org.name;
+    st.companyIntro.companyName = org.name; // nilai awal; ditimpa dbo.AgentIdentity bila sudah diisi
 
     const [wa, tg, cal] = await Promise.all([
       getIntegration(org.id, "whatsapp"),

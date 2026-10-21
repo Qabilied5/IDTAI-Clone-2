@@ -13,17 +13,9 @@ export const PIPELINE_OLLAMA_MODEL = process.env.PIPELINE_OLLAMA_MODEL || OLLAMA
 export const KB_FILTER_MODEL = process.env.KB_FILTER_MODEL || OLLAMA_MODEL;
 export const SEND_MODE = process.env.SEND_MODE || 'mock'; // mock | telegram | whatsapp
 
-// Deskripsi singkat & FAKTUAL soal bisnis Indotrading — disisipkan ke SEMUA
-// prompt Ollama. Tanpa ini, model bisa "mengarang" bidang usaha perusahaan.
-export const COMPANY_DESC =
-  process.env.COMPANY_DESC ||
-  'Indotrading.com adalah marketplace B2B & B2G (business-to-business dan ' +
-    'business-to-government) di Indonesia. Kami mempertemukan supplier dengan ' +
-    'buyer perusahaan maupun instansi pemerintah lewat sistem RFQ (permintaan ' +
-    'pembelian/tender online) dan E-Procurement, dan terdaftar resmi di Toko ' +
-    'Daring LKPP. Kami TIDAK memproduksi atau menjual barang/mesin sendiri — ' +
-    'kami adalah platform yang membantu perusahaan (supplier) menjangkau lebih ' +
-    'banyak buyer, dan membantu buyer menemukan supplier yang tepat.';
+// Deskripsi bisnis TIDAK lagi ditulis di kode: tiap perusahaan mengisinya di Pengaturan Agent >
+// Persona (disimpan di dbo.AgentIdentity.CompanyDesc). Env COMPANY_DESC hanya dipakai sebagai nilai
+// awal untuk perusahaan default (lihat state.ts).
 
 // ── Direktori data (relatif ke root project Next.js) ──
 export const DATA_DIR = path.join(process.cwd(), 'data');

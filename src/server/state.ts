@@ -13,6 +13,22 @@ import type {
   PipelineStage, SendLogEntry,
 } from './types';
 
+/** Identitas & persona agent AI milik satu perusahaan (disimpan di dbo.AgentIdentity). */
+export interface CompanyIntro {
+  botName: string;
+  companyName: string;
+  /** Deskripsi bisnis yang dibaca AI di semua prompt. Kosong = AI diminta tidak mengarang. */
+  companyDesc: string;
+  tone?: 'formal' | 'santai' | 'industri' | 'custom';
+  roleTitle?: string;
+  tagline?: string;
+  /** Instruksi khusus pemilik bisnis, ditambahkan ke prompt balasan pelanggan. */
+  sop?: string;
+  langId?: boolean;
+  langAuto?: boolean;
+  greetName?: boolean;
+}
+
 export interface BackendState {
   // ── Kredensial runtime (diatur dari halaman Integrasi; .env cuma fallback awal) ──
   TELEGRAM_BOT_TOKEN: string;
@@ -51,7 +67,7 @@ export interface BackendState {
   pipelineStages: PipelineStage[];
   picQueuePointer: number;
   escalationSettings: EscalationSettings;
-  companyIntro: { botName: string; companyName: string };
+  companyIntro: CompanyIntro;
 
   // ── Flag background jobs (instrumentation.ts) ──
   backgroundStarted: boolean;
@@ -123,9 +139,12 @@ function freshState(orgId: string): BackendState {
       notifyCustomer: true,
       handoffMessage: 'Percakapan Anda akan diteruskan ke Agent, mohon menunggu beberapa saat',
     },
+    // Nilai .env hanya untuk perusahaan default; perusahaan lain mulai netral. Nama perusahaan
+    // diisi dari tabel Organizations saat boot (integration-sync.ts), lalu ditimpa AgentIdentity.
     companyIntro: {
-      botName: process.env.BOT_NAME || 'IDT AI',
-      companyName: process.env.COMPANY_NAME || 'Indotrading',
+      botName: e('BOT_NAME') || 'Asisten AI',
+      companyName: e('COMPANY_NAME') || 'perusahaan kami',
+      companyDesc: e('COMPANY_DESC'),
     },
 
     backgroundStarted: false,
