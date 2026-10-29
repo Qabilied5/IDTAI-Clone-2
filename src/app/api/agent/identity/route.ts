@@ -7,9 +7,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const TONES = ['formal', 'santai', 'industri', 'custom'] as const;
-const TEXT_LIMITS: Record<'botName' | 'companyName' | 'companyDesc' | 'roleTitle' | 'tagline' | 'sop', number> = {
+const TEXT_LIMITS: Record<'botName' | 'companyDesc' | 'roleTitle' | 'tagline' | 'sop', number> = {
   botName: 100,
-  companyName: 150,
   companyDesc: 4000,
   roleTitle: 100,
   tagline: 200,
@@ -23,7 +22,9 @@ export async function GET() {
   return ok({ identity: { ...state.companyIntro } });
 }
 
-/* POST — simpan identitas & persona. Semua field opsional, tetapi minimal satu harus ada. */
+/* POST — simpan identitas & persona. Semua field opsional, tetapi minimal satu harus ada.
+   Nama PERUSAHAAN tidak diatur di sini: itu Organizations.Name (PATCH /api/organization, khusus admin).
+   Field companyName pada body diabaikan agar tidak bisa menyimpang dari nama organisasi. */
 export async function POST(req: Request) {
   const body = await readJson(req);
   const input: IdentityInput = {};
@@ -47,8 +48,6 @@ export async function POST(req: Request) {
   }
 
   if (Object.keys(input).length === 0) return fail('Tidak ada data identitas yang dikirim', 400);
-  if (input.botName === '' && input.companyName === '' && Object.keys(input).length === 2) {
-    return fail('botName atau companyName wajib diisi', 400);
-  }
+  if (input.botName === '' && Object.keys(input).length === 1) return fail('botName wajib diisi', 400);
   return ok({ identity: agentSetIdentity(input) });
 }

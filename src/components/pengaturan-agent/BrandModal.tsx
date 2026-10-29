@@ -88,6 +88,12 @@ export function BrandModal({ brand, onClose }: { brand: Brand | null; onClose: (
                        placeholder="Mis. Indotrading Kimia, TechMart, GreenBuild..."
                        value={draft.name}
                        onChange={(e) => patch({ name: e.target.value, ...(abbrManual ? {} : { abbr: autoAbbr(e.target.value) }) })} />
+                {brand?.active && (
+                  <div className="pa-helper">
+                    Brand ini sedang aktif: namanya adalah <strong>nama perusahaan</strong> dan dipakai AI saat
+                    memperkenalkan diri. Perubahan berlaku setelah Anda menekan Simpan di halaman pengaturan.
+                  </div>
+                )}
               </div>
 
               <div className="pa-form-2col">

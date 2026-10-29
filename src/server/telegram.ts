@@ -10,6 +10,7 @@ import { clearIntegration, saveIntegration } from './integration-store';
 import { requireOrgId, runWithOrg } from './org-context';
 import { otherOrgHasTelegramToken } from './tenants';
 import { state } from './state';
+import { convSave } from './store';
 import type { Conversation } from './types';
 
 const TG = (token: string) => `https://api.telegram.org/bot${token}`;
@@ -187,6 +188,7 @@ async function tgPollOnce() {
     state.tgOffset = update.update_id + 1;
     if (update.message) await tgProcessMessage(update.message);
     else if (update.callback_query) await tgProcessCallbackQuery(update.callback_query);
+    convSave(); // simpan riwayat percakapan segera setelah satu update selesai diproses
   }
 }
 

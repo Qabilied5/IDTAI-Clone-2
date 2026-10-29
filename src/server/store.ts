@@ -17,6 +17,7 @@ import {
   PIPELINE_DATA_FILE,
 } from './config';
 import { getDefaultOrgId, orgIdOrDefault } from './org-context';
+import * as convRepo from './conv-repo';
 import * as repo from './org-repo';
 import { state } from './state';
 
@@ -35,6 +36,10 @@ const MIGRATION_NAME = 'json-files-v1';
 
 const gS = globalThis as unknown as { __idtaiDbDown?: Set<string> };
 const dbDown: Set<string> = (gS.__idtaiDbDown ??= new Set());
+/* Perusahaan yang riwayat percakapannya TIDAK bisa dimuat/disimpan (mis. tabel 011 belum dibuat).
+   Dipisah dari dbDown supaya data bisnis lain tetap tersimpan ke database. */
+const gC = globalThis as unknown as { __idtaiConvDown?: Set<string> };
+const convDown: Set<string> = (gC.__idtaiConvDown ??= new Set());
 
 /* Perusahaan DEFAULT memakai file lama (data/*.json); perusahaan lain data/orgs/<orgId>/*.json. */
 function orgFile(file: string): string {
@@ -140,6 +145,17 @@ export function pipelineSave() { persist('pipeline'); }
 /* Appointment: dipanggil setelah dibuat/diubah, dan disapu berkala oleh jobs.ts sebagai pengaman. */
 export function apptSave() { persist('appointments'); }
 
+/* Riwayat percakapan (kontak, status, pesan, waktu) -> dbo.Contacts / Conversations / ChatMessages.
+   Hanya yang berubah yang ditulis; aman dipanggil sering. Dipanggil setelah pesan diproses dan
+   disapu berkala oleh jobs.ts sebagai pengaman. Gagal menulis = dicoba lagi otomatis di sapuan berikutnya. */
+export function convSave() {
+  const orgId = orgIdOrDefault();
+  if (dbDown.has(orgId) || convDown.has(orgId)) return;
+  void convRepo
+    .saveConversations(orgId, state.wabaConversations, state.tgConversations)
+    .catch((e) => console.error('[Store] Gagal menyimpan percakapan (dicoba lagi otomatis):', (e as Error).message));
+}
+
 /* ── muat ─────────────────────────────────────────────────────── */
 
 function loadFromFilesSync() {
@@ -204,6 +220,23 @@ export async function loadOrgDataIntoState(): Promise<void> {
     console.error('[Store] Database tidak terbaca — bekerja dari file JSON sampai server direstart:', (e as Error).message);
     dbDown.add(orgId);
     loadFromFilesSync();
+  }
+
+  // Riwayat percakapan dimuat TERPISAH: bila tabelnya belum ada, hanya percakapan yang tidak tersimpan
+  // (tetap di memori seperti sebelumnya) — data bisnis lain tidak ikut terdampak.
+  if (dbDown.has(orgId)) {
+    convDown.add(orgId);
+  } else {
+    try {
+      const c = await convRepo.loadConversations(orgId);
+      for (const conv of c.whatsapp) if (!state.wabaConversations.has(conv.chatId)) state.wabaConversations.set(conv.chatId, conv);
+      for (const conv of c.telegram) if (!state.tgConversations.has(conv.chatId)) state.tgConversations.set(conv.chatId, conv);
+      const total = c.whatsapp.length + c.telegram.length;
+      if (total) console.log(`[Store] ${total} percakapan dimuat dari database`);
+    } catch (e) {
+      convDown.add(orgId);
+      console.error('[Store] Riwayat percakapan tidak dimuat/disimpan (sudah menjalankan sql/011_conversations.sql?):', (e as Error).message);
+    }
   }
   state.dataLoaded = true;
 }

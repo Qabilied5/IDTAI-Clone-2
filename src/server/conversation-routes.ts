@@ -9,7 +9,7 @@ import { state } from './state';
 import { sendViaTelegram, tgConversationSummaryList } from './telegram';
 import type { Conversation } from './types';
 import { sendViaWaba, wabaConversationSummaryList } from './waba';
-import { ensureDataLoaded } from './store';
+import { convSave, ensureDataLoaded } from './store';
 
 export type Provider = 'telegram' | 'whatsapp';
 
@@ -38,6 +38,7 @@ export function getConversation(provider: Provider, chatId: string) {
   const conv = mapOf(provider).get(chatId);
   if (!conv) return fail('Percakapan tidak ditemukan', 404);
   conv.unread = 0;
+  convSave();
   return ok({ conversation: conv });
 }
 
@@ -61,6 +62,7 @@ export async function sendToConversation(provider: Provider, chatId: string, req
     conv.lastMessageText = text;
     conv.lastMessageTime = msg.time;
     conv.handledBy = 'human';
+    convSave();
 
     return ok({ message: msg, conversation: conv });
   } catch (err) {
@@ -89,5 +91,6 @@ export async function takeoverConversation(provider: Provider, chatId: string, r
     conv.escalated = false;
     conv.escalationReason = null;
   }
+  convSave();
   return ok({ conversation: conv });
 }

@@ -27,7 +27,7 @@ export async function loadIntegrationsIntoState(): Promise<void> {
 
   for (const org of orgs) {
     const st = getStateFor(org.id);
-    st.companyIntro.companyName = org.name; // nilai awal; ditimpa dbo.AgentIdentity bila sudah diisi
+    st.companyIntro.companyName = org.name; // nilai awal
 
     const [wa, tg, cal] = await Promise.all([
       getIntegration(org.id, "whatsapp"),
@@ -61,5 +61,8 @@ export async function loadIntegrationsIntoState(): Promise<void> {
 
     // Data bisnis (KB, agent, eskalasi, identitas, pipeline) dari SQL Server.
     await runWithOrg(org.id, () => loadOrgDataIntoState());
+    // Nama organisasi (Organizations.Name) adalah sumber kebenaran: menimpa AgentIdentity.CompanyName
+    // bila keduanya pernah berbeda. Inilah nama yang dipakai AI saat memperkenalkan diri.
+    st.companyIntro.companyName = org.name;
   }
 }

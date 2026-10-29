@@ -36,8 +36,10 @@ export function MultiBrandSection() {
       <div className="pa-alert pa-alert-info">
         <Info />
         <span>
-          Brand yang <strong>aktif</strong> akan digunakan sebagai konfigurasi default AI Agent. Klik kartu brand untuk
-          mengaktifkannya, atau klik <strong>⚙</strong> untuk edit konfigurasi spesifik.
+          Nama brand yang <strong>aktif</strong> adalah <strong>nama perusahaan Anda</strong> (disimpan sebagai nama
+          organisasi di database) dan menjadi dasar AI memperkenalkan diri ke pelanggan. Klik kartu brand untuk
+          mengaktifkannya, atau klik <strong>⚙</strong> untuk mengedit. Mengubah brand aktif berarti mengganti nama
+          perusahaan dan hanya bisa dilakukan admin.
         </span>
       </div>
 

@@ -13,7 +13,7 @@ import { clearIntegration, saveIntegration } from './integration-store';
 import { currentOrgIdOrNull, requireOrgId, runWithOrg } from './org-context';
 import { findOrgByWabaPhoneNumberId, otherOrgHasWabaPhone } from './tenants';
 import { state, wabaConfigured } from './state';
-import { ensureDataLoaded } from './store';
+import { convSave, ensureDataLoaded } from './store';
 import type { Conversation, SchedOption } from './types';
 
 function assertConfigured() {
@@ -54,7 +54,13 @@ function wabaEnqueue(rawChatId: string, job: () => Promise<void>) {
   const chatId = `${currentOrgIdOrNull() ?? 'default'}:${rawChatId}`;
   const prev = chatQueues.get(chatId) || Promise.resolve();
   const next: Promise<void> = prev
-    .then(job)
+    .then(async () => {
+      try {
+        await job();
+      } finally {
+        convSave(); // simpan riwayat percakapan segera setelah satu pesan selesai diproses
+      }
+    })
     .catch((err) => console.error('[WABA] Gagal proses pesan masuk:', (err as Error).message))
     .finally(() => { if (chatQueues.get(chatId) === next) chatQueues.delete(chatId); });
   chatQueues.set(chatId, next);

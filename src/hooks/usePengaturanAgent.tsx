@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useAuthStore } from "@/store/useAuthStore";
 import {
   DEFAULT_ESCALATION,
   DEFAULT_FORM,
@@ -89,11 +90,14 @@ interface EscalationRes {
   settings?: Partial<Omit<EscalationForm, "triggers">> & { triggers?: Partial<EscalationForm["triggers"]> };
 }
 interface AgentsRes { agents?: PicAgent[] }
+interface OrgRes { organization?: { id: string; name: string; slug: string } }
 
 export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
   const [form, setFormState] = useState<PaForm>(DEFAULT_FORM);
   const [saved, setSaved] = useState<PaForm>(DEFAULT_FORM);
   const [companyName, setCompanyName] = useState("");
+  // Nama perusahaan yang tersimpan di server (Organizations.Name). Nama brand aktif harus sama dengan ini.
+  const [orgName, setOrgName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -122,10 +126,11 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [idRes, escRes, agRes] = await Promise.allSettled([
+      const [idRes, escRes, agRes, orgRes] = await Promise.allSettled([
         apiFetch<IdentityRes>("/agent/identity"),
         apiFetch<EscalationRes>("/escalation-settings"),
         apiFetch<AgentsRes>("/agents"),
+        apiFetch<OrgRes>("/organization"),
       ]);
       if (cancelled) return;
 
@@ -159,6 +164,11 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
         };
       }
 
+      // Nama perusahaan = Organizations.Name (sumber kebenaran); identitas hanya jadi cadangan.
+      if (orgRes.status === "fulfilled" && orgRes.value.organization?.name) {
+        company = orgRes.value.organization.name;
+      }
+
       const loadedAgents = agRes.status === "fulfilled" ? agRes.value.agents ?? [] : [];
       if (agRes.status === "rejected") {
         console.error("Gagal memuat daftar PIC/Agent:", agRes.reason);
@@ -172,6 +182,7 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
       ];
 
       setCompanyName(company);
+      setOrgName(orgRes.status === "fulfilled" ? company : "");
       setAgents(loadedAgents);
       setAgentsLoading(false);
       setFormState(next);
@@ -192,6 +203,21 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
     const active = form.brands.find((b) => b.active);
     const e = form.escalation;
 
+    // Nama brand AKTIF = nama perusahaan (dbo.Organizations.Name). Mengganti brand aktif atau
+    // mengubah namanya berarti mengganti nama perusahaan — khusus admin, dan perlu konfirmasi.
+    const newName = (active?.name ?? "").replace(/\s+/g, " ").trim();
+    const needRename = !!orgName && !!newName && newName !== orgName;
+    if (needRename) {
+      const role = useAuthStore.getState().user?.role;
+      if (role !== "admin" && role !== "super_admin") {
+        toast("Hanya admin yang boleh mengubah nama perusahaan (nama brand aktif).", "error");
+        return;
+      }
+      if (!window.confirm(`Nama perusahaan akan diubah dari "${orgName}" menjadi "${newName}".\n\nNama ini dipakai AI saat memperkenalkan diri ke pelanggan dan tampil di seluruh aplikasi. Lanjutkan?`)) {
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       await Promise.all([
@@ -199,7 +225,6 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
           method: "POST",
           body: JSON.stringify({
             botName,
-            companyName: active?.name ?? "",
             companyDesc: form.companyDesc,
             tone: form.tone,
             roleTitle: form.roleTitle,
@@ -221,7 +246,17 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
           }),
         }),
       ]);
-      if (active?.name) setCompanyName(active.name);
+      if (needRename) {
+        const d = await apiFetch<OrgRes>("/organization", { method: "PATCH", body: JSON.stringify({ name: newName }) });
+        const saved = d.organization?.name ?? newName;
+        setOrgName(saved);
+        setCompanyName(saved);
+        // Sidebar & halaman Pengaturan membaca nama dari store login: perbarui tanpa perlu login ulang.
+        const u = useAuthStore.getState().user;
+        if (u) useAuthStore.setState({ user: { ...u, organizationName: saved } });
+      } else if (orgName) {
+        setCompanyName(orgName);
+      }
       setSaved(form);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 1500);
@@ -231,7 +266,7 @@ export function PengaturanAgentProvider({ children }: { children: ReactNode }) {
     } finally {
       setSaving(false);
     }
-  }, [form, toast]);
+  }, [form, orgName, toast]);
 
   const discard = useCallback(() => {
     setFormState(saved);
