@@ -4,9 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { apiFetch, ApiError } from "@/lib/api";
 import { INTEGRATIONS_CATALOG } from "@/lib/integrations";
-import { calendlyClearStored, calendlySaveStored } from "@/lib/calendly-config";
 import type {
-  CalendlyConfigResponse, CalendlyStatus, Integration, TelegramStatus, WabaStatus,
+  CalendlyStatus, Integration, TelegramStatus, WabaStatus,
 } from "@/types/integration";
 
 /** Integrasi yang punya backend sungguhan (Route Handler port dari server.js). */
@@ -104,12 +103,8 @@ export function useIntegrations() {
         return null;
       }
       try {
-        const res = await apiFetch<CalendlyConfigResponse>(path, { method: "POST", body: JSON.stringify(values) });
-        // Server menyimpan kredensial hanya di memori — simpan salinan di browser
-        // supaya bisa dikirim ulang otomatis setelah server restart (lihat WabaAutoSync).
-        if (id === "calendly" && res?.eventType?.uri) {
-          calendlySaveStored({ token: (values.token || "").trim(), eventTypeUri: res.eventType.uri });
-        }
+        // Calendly: server menyimpan token (terenkripsi) & event type ke database, tidak perlu salinan di browser.
+        await apiFetch(path, { method: "POST", body: JSON.stringify(values) });
         await refresh();
         return null;
       } catch (e) {
@@ -132,7 +127,6 @@ export function useIntegrations() {
       }
       try {
         await apiFetch(path, { method: "DELETE" });
-        if (id === "calendly") calendlyClearStored();
         await refresh();
         return null;
       } catch (e) {
